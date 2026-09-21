@@ -4,6 +4,7 @@
 #include "platform/ClipboardBackend.h"
 #include "platform/PasteBackend.h"
 
+#include <QDebug>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -18,7 +19,7 @@ MainWindow::MainWindow(HistoryStore *store, ClipboardBackend *backend,
       store_(store),
       backend_(backend),
       pasteBackend_(pasteBackend) {
-    setWindowTitle(QStringLiteral("ClipTool PoC"));
+    setWindowTitle(QStringLiteral("Cliprove"));
     resize(760, 560);
 
     auto *root = new QWidget(this);
@@ -85,10 +86,12 @@ void MainWindow::replayCurrent() {
         return;
     }
 
-    hide();
+    showMinimized();
     QTimer::singleShot(140, this, [this] {
         QString pasteError;
-        if (!pasteBackend_->paste(&pasteError))
+        if (!pasteBackend_->paste(&pasteError)) {
+            qWarning() << "[replay] direct paste failed:" << pasteError;
             status_->setText(QStringLiteral("Direct paste failed: %1").arg(pasteError));
+        }
     });
 }

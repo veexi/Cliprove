@@ -112,15 +112,17 @@ bool WaylandDataControlBackend::setClipboard(const MimePayloads &payloads, QStri
         ext_data_control_source_v1_offer(source, it.key().toUtf8().constData());
 
     sources_.insert(source, payloads);
-    suppressNextSelectionCapture_ = true;
+    suppressOwnSelection_ = true;
     ext_data_control_device_v1_set_selection(device_, source);
 
-    if (wl_display_flush(display_) < 0 && errno != EAGAIN) {
-        sources_.remove(source);
-        ext_data_control_source_v1_destroy(source);
+    if (wl_display_roundtrip(display_) < 0) {
+        suppressOwnSelection_ = false;
+        if (sources_.remove(source))
+            ext_data_control_source_v1_destroy(source);
         if (error) *error = QString::fromLocal8Bit(std::strerror(errno));
         return false;
     }
+    suppressOwnSelection_ = false;
     return true;
 }
 
@@ -167,10 +169,8 @@ void WaylandDataControlBackend::deviceSelection(
     self->selectionOffer_ = offer;
 
     if (!offer) return;
-    if (self->suppressNextSelectionCapture_) {
-        self->suppressNextSelectionCapture_ = false;
+    if (self->suppressOwnSelection_)
         return;
-    }
     self->captureOffer(offer);
 }
 

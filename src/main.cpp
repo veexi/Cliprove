@@ -2,6 +2,11 @@
 #include <QMessageBox>
 #include <QDebug>
 #include <QGuiApplication>
+#include <QIcon>
+#include <QMenu>
+#include <QStyle>
+#include <QSystemTrayIcon>
+#include <csignal>
 #include <memory>
 
 #include "core/HistoryStore.h"
@@ -14,8 +19,10 @@
 #include "ui/MainWindow.h"
 
 int main(int argc, char **argv) {
+    std::signal(SIGPIPE, SIG_IGN);
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("ClipTool"));
+    QApplication::setApplicationDisplayName(QStringLiteral("Cliprove"));
     QApplication::setOrganizationName(QStringLiteral("veexi"));
 
     HistoryStore store;
@@ -59,6 +66,30 @@ int main(int argc, char **argv) {
         qWarning() << "Direct paste backend failed to start:" << pasteError;
 
     MainWindow window(&store, backend.get(), pasteBackend.get());
+    QIcon trayIconImage = QIcon::fromTheme(QStringLiteral("edit-paste"));
+    if (trayIconImage.isNull())
+        trayIconImage = app.style()->standardIcon(QStyle::SP_FileIcon);
+    QMenu trayMenu;
+    QSystemTrayIcon trayIcon(trayIconImage, &app);
+    const auto showWindow = [&window] {
+        window.show();
+        window.raise();
+        window.activateWindow();
+    };
+    auto *openAction = trayMenu.addAction(QStringLiteral("Open Cliprove"));
+    QObject::connect(openAction, &QAction::triggered, &window, showWindow);
+    trayMenu.addSeparator();
+    auto *quitAction = trayMenu.addAction(QStringLiteral("Quit"));
+    QObject::connect(quitAction, &QAction::triggered, &app, &QApplication::quit);
+    trayIcon.setContextMenu(&trayMenu);
+    trayIcon.setToolTip(QStringLiteral("Cliprove"));
+    QObject::connect(&trayIcon, &QSystemTrayIcon::activated, &window,
+                     [showWindow](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::Trigger ||
+            reason == QSystemTrayIcon::DoubleClick)
+            showWindow();
+    });
+    trayIcon.show();
     QObject::connect(backend.get(), &ClipboardBackend::clipboardCaptured,
                      &window, [&](const MimePayloads &payloads) {
         QString dbError;

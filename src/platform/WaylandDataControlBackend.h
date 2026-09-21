@@ -51,5 +51,5 @@ private:
     QHash<ext_data_control_offer_v1 *, QStringList> offers_;
     QHash<ext_data_control_source_v1 *, MimePayloads> sources_;
     QSocketNotifier *notifier_ = nullptr;
-    bool suppressNextSelectionCapture_ = false;
+    bool suppressOwnSelection_ = false;
 };
