@@ -46,6 +46,19 @@ int main(int argc, char **argv) {
         pasteBackend = std::make_unique<PortalEisPasteBackend>();
     }
 
+    MainWindow window(&store, backend.get(), pasteBackend.get());
+    QObject::connect(backend.get(), &ClipboardBackend::clipboardCaptured,
+                     &window, [&](const MimePayloads &payloads) {
+        if (payloads.size() == 1 &&
+            payloads.contains(QStringLiteral("application/x-kde-onlyReplaceEmpty")))
+            return;
+        QString dbError;
+        const qint64 id = store.addEntry(payloads, &dbError);
+        if (id < 0)
+            qWarning() << "History insert failed:" << dbError;
+        window.refresh();
+    });
+
     if (!backend->start(&error)) {
         QMessageBox::critical(nullptr, QStringLiteral("ClipTool"),
                               QStringLiteral("Clipboard backend failed: %1").arg(error));
@@ -65,7 +78,6 @@ int main(int argc, char **argv) {
     if (!pasteBackend->start(&pasteError))
         qWarning() << "Direct paste backend failed to start:" << pasteError;
 
-    MainWindow window(&store, backend.get(), pasteBackend.get());
     QIcon trayIconImage = QIcon::fromTheme(QStringLiteral("edit-paste"));
     if (trayIconImage.isNull())
         trayIconImage = app.style()->standardIcon(QStyle::SP_FileIcon);
@@ -90,15 +102,6 @@ int main(int argc, char **argv) {
             showWindow();
     });
     trayIcon.show();
-    QObject::connect(backend.get(), &ClipboardBackend::clipboardCaptured,
-                     &window, [&](const MimePayloads &payloads) {
-        QString dbError;
-        const qint64 id = store.addEntry(payloads, &dbError);
-        if (id < 0)
-            qWarning() << "History insert failed:" << dbError;
-        window.refresh();
-    });
-
     window.show();
     return app.exec();
 }
