@@ -1,0 +1,65 @@
+cmake_minimum_required(VERSION 3.24)
+project(ClipTool VERSION 0.1.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOMOC ON)
+
+find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Widgets Sql)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(WAYLAND REQUIRED IMPORTED_TARGET wayland-client)
+pkg_check_modules(XCB REQUIRED IMPORTED_TARGET xcb xcb-xtest xcb-keysyms)
+pkg_check_modules(EI REQUIRED IMPORTED_TARGET libei-1.0 liboeffis-1.0)
+find_program(WAYLAND_SCANNER wayland-scanner REQUIRED)
+
+set(PROTOCOL_XML "${CMAKE_SOURCE_DIR}/protocols/ext-data-control-v1.xml")
+set(PROTOCOL_HEADER "${CMAKE_BINARY_DIR}/generated/ext-data-control-v1-client-protocol.h")
+set(PROTOCOL_CODE "${CMAKE_BINARY_DIR}/generated/ext-data-control-v1-protocol.c")
+
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+
+add_custom_command(
+    OUTPUT "${PROTOCOL_HEADER}" "${PROTOCOL_CODE}"
+    COMMAND "${WAYLAND_SCANNER}" client-header "${PROTOCOL_XML}" "${PROTOCOL_HEADER}"
+    COMMAND "${WAYLAND_SCANNER}" private-code "${PROTOCOL_XML}" "${PROTOCOL_CODE}"
+    DEPENDS "${PROTOCOL_XML}"
+    VERBATIM
+)
+
+add_executable(cliptool
+    src/main.cpp
+    src/core/ClipboardTypes.h
+    src/core/HistoryStore.h
+    src/core/HistoryStore.cpp
+    src/platform/ClipboardBackend.h
+    src/platform/WaylandDataControlBackend.h
+    src/platform/WaylandDataControlBackend.cpp
+    src/platform/PasteBackend.h
+    src/platform/PortalEisPasteBackend.h
+    src/platform/PortalEisPasteBackend.cpp
+    src/platform/X11ClipboardBackend.h
+    src/platform/X11ClipboardBackend.cpp
+    src/platform/X11PasteBackend.h
+    src/platform/X11PasteBackend.cpp
+    src/ui/MainWindow.h
+    src/ui/MainWindow.cpp
+    "${PROTOCOL_CODE}"
+)
+
+target_include_directories(cliptool PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_BINARY_DIR}/generated"
+)
+
+target_link_libraries(cliptool PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Sql
+    PkgConfig::WAYLAND
+    PkgConfig::XCB
+    PkgConfig::EI
+)
+
+target_compile_options(cliptool PRIVATE -Wall -Wextra -Wpedantic)
+install(TARGETS cliptool RUNTIME DESTINATION bin)
