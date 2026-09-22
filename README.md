@@ -1,39 +1,66 @@
 # Cliprove
 
-Cliprove is an experimental native clipboard history manager for Linux. It saves multiple MIME formats for each clipboard item, lets you search past items, and can paste a selected item directly into the previous window.
+Cliprove is a KDE Plasma 6 clipboard popup based on KDE's Klipper/Clipboard QML, with two behavioral changes:
 
-## Current status
+- click a history item to paste it directly into the previously focused application;
+- hold **Ctrl** and click multiple items, then press **Enter** to paste them in list order.
 
-- KDE Plasma on Wayland: clipboard capture, multi-format history, search, restore, and direct paste have been tested.
-- X11: Qt clipboard capture and XTest direct paste passed an isolated Xvfb/Openbox end-to-end test; testing on a regular X11 desktop remains to be done.
-- GNOME on Wayland: a Clipboard Portal backend is experimental and is not yet connected as a fallback.
-- Starred entries are stored in SQLite and shown first. Right-click an entry to star it, or select it and press Ctrl+D. Starred entries are excluded from the configurable history limit.
-- Clicking an entry restores it, hides the window when a system tray is available, and requests direct paste. Ctrl/Shift-click selects several entries; **Paste selected** or Enter then restores and pastes each item separately in the visible list order.
-- Clipboard images and local image files copied as file URIs can have cached thumbnails. Settings include batch paste delay, unstarred history limit, thumbnail display and size, and single-click paste.
+Everything else intentionally stays close to KDE Clipboard: search, starred items, editing, QR/barcode actions, history model, Plasma styling, and theme integration.
 
-These new interactions still need a KDE desktop acceptance test. A batch paste uses a time delay between items because target applications do not acknowledge when each paste has finished. If the target is slow, increase the delay in Settings.
+## Current behavior
 
-The window is named Cliprove. The executable and application data directory still use the development name `ClipTool`, preserving the existing history under `veexi/ClipTool`.
+Cliprove owns **Meta+V** directly through KDE GlobalAccel. It does not use a panel applet or system-tray popup, so the window is not anchored to an auto-hidden panel.
+
+On first launch the popup is centered on the active display. If you move it, the position is saved and restored the next time it opens.
+
+The popup is a native `PlasmaQuick::PlasmaWindow`. Direct paste is injected through the XDG RemoteDesktop portal and libei.
+
+## Upstream
+
+The clipboard QML in `plasmoid/contents/ui` is forked from:
+
+- repository: `KDE/plasma-workspace`
+- tag: `v6.7.3`
+- paths: `applets/clipboard` and `klipper/declarative/qml`
+- license: GPL-2.0-or-later
+
+See `plasmoid/UPSTREAM.md`.
 
 ## Build
 
-Requires CMake 3.24+, Ninja, a C++23 compiler, Qt 6.6+ (Core, Gui, Widgets, Sql), SQLite support for Qt, Wayland client libraries and scanner, XCB with XTest and keysyms, and `libei-1.0` / `liboeffis-1.0`.
+The current target is KDE Plasma 6 on Wayland. The build requires CMake 3.24+, Ninja, a C++23 compiler, Qt 6.6+ (Core, DBus, Gui, Qml, Quick), PlasmaQuick, KWayland, KF6 GlobalAccel, and libei/liboeffis development files.
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j2
-./build/cliptool
+cmake -S . -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+cmake --build build/release --target cliprove-popup cliprove-paste-daemon -j2
 ```
 
-On the current SteamOS development machine, build inside the `cliptool-dev` distrobox and set `PATH=/usr/bin:/bin` to avoid old host toolchain shims.
+For a per-user install:
 
-## Implementation
+```sh
+./packaging/install-user.sh
+```
 
-- `src/core`: SQLite history with SHA-256 deduplication and MIME payload storage.
-- `src/platform`: Wayland data-control, X11 clipboard, and direct paste backends.
-- `src/ui`: Qt Widgets proof-of-concept interface.
-- `protocols`: Wayland `ext-data-control-v1` protocol definition.
+This installs two user services:
 
-The active Wayland path uses `ext-data-control-v1` for clipboard access and the RemoteDesktop Portal with libei for direct paste. Experimental Portal clipboard and D-Bus paste code is present but is not part of the current build.
+- `cliprove-popup.service`: persistent Plasma popup and Meta+V owner;
+- `cliprove-paste-daemon.service`: portal/libei paste injector.
 
-The initial release target is KDE Plasma on Wayland and X11. GNOME Portal fallback and release packaging are deferred. File history stores clipboard metadata such as file URIs, not file contents. SQLite WAL mode, full synchronous commits, a startup integrity check, and a single-instance lock protect the history across process crashes; they cannot capture copies made while Cliprove is not running.
+The installer also disables KDE's stock `show-on-mouse-pos` Meta+V shortcut so there is no conflict.
+
+## AppImage
+
+A KDE-Plasma-specific AppImage can be built with `packaging/stage_appdir.py`. It intentionally uses the host Plasma/Qt/KF6 runtime because Cliprove imports KDE's private clipboard QML module and must stay ABI-compatible with the installed Plasma version.
+
+See `packaging/README.md`. This is therefore a convenient single-file package for compatible Plasma 6 systems, not a desktop-agnostic universal AppImage.
+
+## Source layout
+
+- `src/popup`: standalone Plasma popup, position persistence, GlobalAccel integration;
+- `src/paste`: D-Bus paste helper;
+- `src/platform/PortalEisPasteBackend.*`: RemoteDesktop portal + libei key injection;
+- `plasmoid/contents/ui`: forked KDE Clipboard QML with Ctrl-click multi-select;
+- `resources/popup.qrc`: embeds the modified clipboard QML;
+- `packaging`: user-service installer and AppImage staging.
+
+The older QWidget proof-of-concept remains in the repository for history, but it is no longer the active Cliprove UI.

@@ -1,0 +1,12 @@
+[Unit]
+Description=Cliprove direct paste helper
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/cliprove-paste-daemon
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

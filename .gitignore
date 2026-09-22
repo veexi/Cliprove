@@ -5,3 +5,7 @@
 /AGENTS.md
 /CLAUDE.md
 /CODEX_HANDOFF.md
+
+/tools/
+__pycache__/
+*.pyc

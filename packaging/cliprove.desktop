@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
 Name=Cliprove
-Comment=Clipboard history for KDE Plasma
-Exec=cliptool
-Icon=cliprove-minimal
+Comment=KDE Plasma clipboard popup with direct and multi-paste
+Exec=cliprove
+Icon=cliprove
 Categories=Utility;
 Terminal=false
-StartupNotify=true
+StartupNotify=false

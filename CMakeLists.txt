@@ -1,12 +1,17 @@
 cmake_minimum_required(VERSION 3.24)
-project(ClipTool VERSION 0.1.0 LANGUAGES C CXX)
+project(ClipTool VERSION 0.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Widgets Sql)
+find_package(Qt6 6.6 REQUIRED COMPONENTS Core DBus Gui Widgets Sql)
+find_package(Qt6 6.6 QUIET COMPONENTS Quick Qml)
+find_package(KF6Config QUIET)
+find_package(KF6GlobalAccel QUIET)
+find_package(PlasmaQuick QUIET)
+find_package(KWayland QUIET)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(WAYLAND REQUIRED IMPORTED_TARGET wayland-client)
 pkg_check_modules(XCB REQUIRED IMPORTED_TARGET xcb xcb-xtest xcb-keysyms)
@@ -74,6 +79,40 @@ target_link_libraries(cliptool PRIVATE
 
 target_compile_options(cliptool PRIVATE -Wall -Wextra -Wpedantic)
 install(TARGETS cliptool RUNTIME DESTINATION bin)
+
+add_executable(cliprove-paste-daemon
+    src/paste/PasteDaemon.cpp
+    src/platform/PasteBackend.h
+    src/platform/PortalEisPasteBackend.h
+    src/platform/PortalEisPasteBackend.cpp
+)
+target_include_directories(cliprove-paste-daemon PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(cliprove-paste-daemon PRIVATE
+    Qt6::Core
+    Qt6::DBus
+    PkgConfig::EI
+)
+target_compile_options(cliprove-paste-daemon PRIVATE -Wall -Wextra -Wpedantic)
+install(TARGETS cliprove-paste-daemon RUNTIME DESTINATION bin)
+
+if(TARGET Plasma::PlasmaQuick AND TARGET Plasma::KWaylandClient AND TARGET KF6::GlobalAccel AND TARGET Qt6::Quick AND TARGET Qt6::Qml)
+    add_executable(cliprove-popup
+        src/popup/CliprovePopup.cpp
+        resources/popup.qrc
+    )
+    target_link_libraries(cliprove-popup PRIVATE
+        Qt6::Core
+        Qt6::DBus
+        Qt6::Gui
+        Qt6::Qml
+        Qt6::Quick
+        Plasma::PlasmaQuick
+        Plasma::KWaylandClient
+        KF6::GlobalAccel
+    )
+    target_compile_options(cliprove-popup PRIVATE -Wall -Wextra -Wpedantic)
+    install(TARGETS cliprove-popup RUNTIME DESTINATION bin)
+endif()
 
 include(CTest)
 if(BUILD_TESTING)
