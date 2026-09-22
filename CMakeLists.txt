@@ -4,6 +4,7 @@ project(ClipTool VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Widgets Sql)
 find_package(PkgConfig REQUIRED)
@@ -44,6 +45,15 @@ add_executable(cliptool
     src/platform/X11PasteBackend.cpp
     src/ui/MainWindow.h
     src/ui/MainWindow.cpp
+    src/ui/HistoryItemDelegate.h
+    src/ui/HistoryItemDelegate.cpp
+    src/ui/ToggleSwitch.h
+    src/ui/ToggleSwitch.cpp
+    src/ui/SettingsDialog.h
+    src/ui/SettingsDialog.cpp
+    src/ui/Theme.h
+    src/ui/Theme.cpp
+    resources/resources.qrc
     "${PROTOCOL_CODE}"
 )
 
@@ -86,6 +96,15 @@ if(BUILD_TESTING)
         src/platform/PasteBackend.h
         src/ui/MainWindow.h
         src/ui/MainWindow.cpp
+        src/ui/HistoryItemDelegate.h
+        src/ui/HistoryItemDelegate.cpp
+        src/ui/ToggleSwitch.h
+        src/ui/ToggleSwitch.cpp
+        src/ui/SettingsDialog.h
+        src/ui/SettingsDialog.cpp
+        src/ui/Theme.h
+        src/ui/Theme.cpp
+        resources/resources.qrc
     )
     target_include_directories(main-window-flow-test PRIVATE "${CMAKE_SOURCE_DIR}/src")
     target_link_libraries(main-window-flow-test PRIVATE

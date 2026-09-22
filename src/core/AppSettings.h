@@ -9,6 +9,10 @@ struct AppSettings {
     int thumbnailSize = 72;
     bool showThumbnails = true;
     bool clickToPaste = true;
+    bool animationsEnabled = true;
+    bool compactRows = false;
+    bool startMinimized = false;
+    bool closeToTray = true;
 
     static AppSettings load() {
         QSettings settings;
@@ -21,6 +25,10 @@ struct AppSettings {
             settings.value(QStringLiteral("ui/thumbnailSize"), 72).toInt(), 40, 128);
         result.showThumbnails = settings.value(QStringLiteral("ui/showThumbnails"), true).toBool();
         result.clickToPaste = settings.value(QStringLiteral("paste/clickToPaste"), true).toBool();
+        result.animationsEnabled = settings.value(QStringLiteral("ui/animationsEnabled"), true).toBool();
+        result.compactRows = settings.value(QStringLiteral("ui/compactRows"), false).toBool();
+        result.startMinimized = settings.value(QStringLiteral("general/startMinimized"), false).toBool();
+        result.closeToTray = settings.value(QStringLiteral("general/closeToTray"), true).toBool();
         return result;
     }
 
@@ -31,6 +39,10 @@ struct AppSettings {
         settings.setValue(QStringLiteral("ui/thumbnailSize"), thumbnailSize);
         settings.setValue(QStringLiteral("ui/showThumbnails"), showThumbnails);
         settings.setValue(QStringLiteral("paste/clickToPaste"), clickToPaste);
+        settings.setValue(QStringLiteral("ui/animationsEnabled"), animationsEnabled);
+        settings.setValue(QStringLiteral("ui/compactRows"), compactRows);
+        settings.setValue(QStringLiteral("general/startMinimized"), startMinimized);
+        settings.setValue(QStringLiteral("general/closeToTray"), closeToTray);
         settings.sync();
         return settings.status() == QSettings::NoError;
     }

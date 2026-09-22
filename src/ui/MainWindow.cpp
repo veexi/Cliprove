@@ -3,13 +3,15 @@
 #include "core/HistoryStore.h"
 #include "platform/ClipboardBackend.h"
 #include "platform/PasteBackend.h"
+#include "ui/SettingsDialog.h"
+#include "ui/HistoryItemDelegate.h"
+#include "ui/Theme.h"
 
 #include <QApplication>
-#include <QCheckBox>
+#include <QCloseEvent>
+#include <QColor>
 #include <QDebug>
-#include <QDialog>
-#include <QDialogButtonBox>
-#include <QFormLayout>
+#include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QItemSelectionModel>
@@ -18,12 +20,12 @@
 #include <QListWidget>
 #include <QMenu>
 #include <QPixmap>
+#include <QPropertyAnimation>
 #include <QPushButton>
 #include <QScrollBar>
 #include <QShowEvent>
 #include <QShortcut>
 #include <QSet>
-#include <QSpinBox>
 #include <QSystemTrayIcon>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -39,38 +41,100 @@ MainWindow::MainWindow(HistoryStore *store, ClipboardBackend *backend,
       pasteBackend_(pasteBackend),
       settings_(settings) {
     setWindowTitle(QStringLiteral("Cliprove"));
-    resize(760, 560);
+    setWindowIcon(Theme::windowIcon());
+    resize(860, 620);
+    setMinimumSize(720, 500);
 
     auto *root = new QWidget(this);
     auto *layout = new QVBoxLayout(root);
+    layout->setContentsMargins(16, 16, 16, 14);
+    layout->setSpacing(12);
 
-    search_ = new QLineEdit(root);
-    search_->setPlaceholderText(QStringLiteral("Search clipboard history..."));
+    auto *topBar = new QWidget(root);
+    topBar->setObjectName(QStringLiteral("topBar"));
+    auto *topLayout = new QHBoxLayout(topBar);
+    topLayout->setContentsMargins(14, 10, 12, 10);
+    topLayout->setSpacing(10);
+
+    auto *brandIcon = new QLabel(topBar);
+    brandIcon->setPixmap(Theme::appIcon().pixmap(QSize(34, 34)));
+    brandIcon->setFixedSize(36, 36);
+
+    auto *brandColumn = new QVBoxLayout;
+    brandColumn->setSpacing(0);
+    auto *brandTitle = new QLabel(QStringLiteral("Cliprove"), topBar);
+    brandTitle->setObjectName(QStringLiteral("brandTitle"));
+    auto *brandSubtitle = new QLabel(QStringLiteral("剪贴板历史"), topBar);
+    brandSubtitle->setObjectName(QStringLiteral("brandSubtitle"));
+    brandColumn->addWidget(brandTitle);
+    brandColumn->addWidget(brandSubtitle);
+
+    search_ = new QLineEdit(topBar);
+    search_->setClearButtonEnabled(true);
+    search_->setPlaceholderText(QStringLiteral("搜索剪贴板历史…"));
+
+    settingsButton_ = new QPushButton(QStringLiteral("⚙"), topBar);
+    settingsButton_->setObjectName(QStringLiteral("iconButton"));
+    settingsButton_->setToolTip(QStringLiteral("设置"));
+
+    topLayout->addWidget(brandIcon);
+    topLayout->addLayout(brandColumn);
+    topLayout->addSpacing(10);
+    topLayout->addWidget(search_, 1);
+    topLayout->addWidget(settingsButton_);
+
     list_ = new QListWidget(root);
-    list_->setAlternatingRowColors(true);
+    list_->setObjectName(QStringLiteral("historyList"));
+    list_->setItemDelegate(new HistoryItemDelegate(list_));
+    list_->setAlternatingRowColors(false);
     list_->setSelectionMode(QAbstractItemView::ExtendedSelection);
     list_->setContextMenuPolicy(Qt::CustomContextMenu);
-    status_ = new QLabel(QStringLiteral("Backend: %1").arg(backend_->backendName()), root);
+    list_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 
-    auto *star = new QPushButton(QStringLiteral("★ Star (Ctrl+D)"), root);
-    auto *replay = new QPushButton(QStringLiteral("Paste selected (Enter)"), root);
-    auto *settingsButton = new QPushButton(QStringLiteral("Settings"), root);
     auto *actions = new QHBoxLayout;
-    actions->addWidget(star);
-    actions->addWidget(replay);
-    actions->addWidget(settingsButton);
-    layout->addWidget(search_);
+    actions->setSpacing(8);
+    starButton_ = new QPushButton(QStringLiteral("★ 收藏  Ctrl+D"), root);
+    starButton_->setObjectName(QStringLiteral("starButton"));
+    replayButton_ = new QPushButton(QStringLiteral("粘贴所选  Enter"), root);
+    replayButton_->setObjectName(QStringLiteral("pasteButton"));
+    replayButton_->setProperty("primary", true);
+    actions->addWidget(starButton_);
+    actions->addStretch();
+    actions->addWidget(replayButton_);
+
+    auto *statusBar = new QWidget(root);
+    statusBar->setObjectName(QStringLiteral("statusBar"));
+    auto *statusLayout = new QHBoxLayout(statusBar);
+    statusLayout->setContentsMargins(12, 7, 12, 7);
+    statusLayout->setSpacing(10);
+    auto *monitorDot = new QLabel(QStringLiteral("●"), statusBar);
+    monitorDot->setStyleSheet(QStringLiteral("color:#10b981;"));
+    status_ = new QLabel(QStringLiteral("正在监听剪贴板"), statusBar);
+    status_->setObjectName(QStringLiteral("statusDetail"));
+    countLabel_ = new QLabel(statusBar);
+    countLabel_->setObjectName(QStringLiteral("statusDetail"));
+    auto *backendLabel = new QLabel(backend_->backendName(), statusBar);
+    backendLabel->setObjectName(QStringLiteral("statusDetail"));
+    statusLayout->addWidget(monitorDot);
+    statusLayout->addWidget(status_);
+    statusLayout->addSpacing(4);
+    statusLayout->addWidget(countLabel_);
+    statusLayout->addStretch();
+    statusLayout->addWidget(backendLabel);
+
+    layout->addWidget(topBar);
     layout->addWidget(list_, 1);
     layout->addLayout(actions);
-    layout->addWidget(status_);
+    layout->addWidget(statusBar);
     setCentralWidget(root);
+    applyVisualStyle();
 
     connect(search_, &QLineEdit::textChanged, this, [this] { refresh(); });
     connect(list_->verticalScrollBar(), &QScrollBar::valueChanged,
             this, [this] { loadVisibleThumbnails(); });
-    connect(replay, &QPushButton::clicked, this, &MainWindow::replayCurrent);
-    connect(star, &QPushButton::clicked, this, &MainWindow::toggleStarred);
-    connect(settingsButton, &QPushButton::clicked, this, &MainWindow::openSettings);
+    connect(replayButton_, &QPushButton::clicked, this, &MainWindow::replayCurrent);
+    connect(starButton_, &QPushButton::clicked, this, &MainWindow::toggleStarred);
+    connect(settingsButton_, &QPushButton::clicked, this, &MainWindow::openSettings);
     auto *starShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+D")), list_);
     starShortcut->setContext(Qt::WidgetShortcut);
     connect(starShortcut, &QShortcut::activated, this, &MainWindow::toggleStarred);
@@ -95,9 +159,9 @@ MainWindow::MainWindow(HistoryStore *store, ClipboardBackend *backend,
         menu.exec(list_->viewport()->mapToGlobal(position));
     });
     connect(backend_, &ClipboardBackend::backendError, this,
-            [this](const QString &message) { status_->setText(message); });
+            [this](const QString &message) { showStatus(message, true); });
     connect(pasteBackend_, &PasteBackend::statusChanged, this,
-            [this](const QString &message) { status_->setText(message); });
+            [this](const QString &message) { showStatus(message); });
 
     replayTimer_.setSingleShot(true);
     connect(&replayTimer_, &QTimer::timeout, this, [this] {
@@ -136,25 +200,38 @@ void MainWindow::refresh() {
     QString historyError;
     const auto entries = store_->recentEntries(1000, search_->text(), &historyError);
     for (const ClipboardEntry &entry : entries) {
-        const QString time = entry.createdAt.toString(QStringLiteral("MM-dd HH:mm:ss"));
-        auto *item = new QListWidgetItem(
-            QStringLiteral("%1%2  %3")
-                .arg(entry.starred ? QStringLiteral("★  ") : QString(), time, entry.summary), list_);
+        const QString time = entry.createdAt.toString(QStringLiteral("HH:mm"));
+        auto *item = new QListWidgetItem(entry.summary, list_);
         item->setData(Qt::UserRole, entry.id);
         item->setData(Qt::UserRole + 1, entry.starred);
         item->setToolTip(QString(entry.formats).replace('\n', QStringLiteral(", ")));
         item->setData(Qt::UserRole + 2, settings_.showThumbnails &&
             (entry.formats.contains(QStringLiteral("image/")) ||
              entry.formats.contains(QStringLiteral("text/uri-list"))));
+
+        QString type = QStringLiteral("text");
+        if (entry.formats.contains(QStringLiteral("image/")))
+            type = QStringLiteral("image");
+        else if (entry.formats.contains(QStringLiteral("text/uri-list")))
+            type = QStringLiteral("file");
+        else if (entry.formats.contains(QStringLiteral("text/html")))
+            type = QStringLiteral("html");
+        else if (entry.formats.contains(QStringLiteral("text/x-moz-url")) ||
+                 entry.summary.startsWith(QStringLiteral("http://")) ||
+                 entry.summary.startsWith(QStringLiteral("https://")))
+            type = QStringLiteral("link");
+
+        item->setData(Qt::UserRole + 3, type);
+        item->setData(Qt::UserRole + 4, time);
+        item->setData(Qt::UserRole + 5, settings_.compactRows);
         if (selectedIds.contains(entry.id)) item->setSelected(true);
         if (entry.id == currentId) currentItem = item;
     }
     if (currentItem)
         list_->setCurrentItem(currentItem, QItemSelectionModel::NoUpdate);
-    status_->setText(historyError.isEmpty()
-                         ? QStringLiteral("%1 · %2 records")
-                               .arg(backend_->backendName()).arg(list_->count())
-                         : QStringLiteral("History read failed: %1").arg(historyError));
+    countLabel_->setText(QStringLiteral("共 %1 条记录").arg(list_->count()));
+    if (!historyError.isEmpty())
+        showStatus(QStringLiteral("读取历史失败：%1").arg(historyError), true);
     QTimer::singleShot(0, this, &MainWindow::loadVisibleThumbnails);
 }
 
@@ -173,14 +250,57 @@ void MainWindow::loadVisibleThumbnails() {
         const QImage thumbnail = store_->thumbnailFor(item->data(Qt::UserRole).toLongLong());
         if (thumbnail.isNull()) continue;
         item->setIcon(QIcon(QPixmap::fromImage(thumbnail)));
-        item->setSizeHint(QSize(0, settings_.thumbnailSize + 10));
     }
     loadingThumbnails_ = false;
 }
 
 void MainWindow::showEvent(QShowEvent *event) {
     QMainWindow::showEvent(event);
+    if (!hasAnimatedShow_ && settings_.animationsEnabled) {
+        hasAnimatedShow_ = true;
+        animateWindowIn();
+    }
     QTimer::singleShot(0, this, &MainWindow::loadVisibleThumbnails);
+}
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+    if (settings_.closeToTray && QSystemTrayIcon::isSystemTrayAvailable()) {
+        event->ignore();
+        hide();
+        showStatus(QStringLiteral("Cliprove 将继续在系统托盘运行"));
+        return;
+    }
+    QMainWindow::closeEvent(event);
+}
+
+void MainWindow::applyVisualStyle() {
+    list_->setSpacing(settings_.compactRows ? 0 : 1);
+    list_->setIconSize(QSize(settings_.thumbnailSize, settings_.thumbnailSize));
+    search_->setMinimumWidth(260);
+}
+
+void MainWindow::animateWindowIn() {
+    if (!centralWidget()) return;
+    auto *effect = new QGraphicsOpacityEffect(centralWidget());
+    centralWidget()->setGraphicsEffect(effect);
+    effect->setOpacity(0.25);
+
+    auto *animation = new QPropertyAnimation(effect, "opacity", centralWidget());
+    animation->setDuration(160);
+    animation->setStartValue(0.25);
+    animation->setEndValue(1.0);
+    connect(animation, &QPropertyAnimation::finished, centralWidget(), [this] {
+        if (centralWidget())
+            centralWidget()->setGraphicsEffect(nullptr);
+    });
+    animation->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void MainWindow::showStatus(const QString &message, bool error) {
+    status_->setText(message);
+    status_->setStyleSheet(error
+        ? QStringLiteral("color:#dc2626;")
+        : QString());
 }
 
 void MainWindow::toggleStarred() {
@@ -276,64 +396,24 @@ void MainWindow::showStoreError(const QString &error) {
 }
 
 void MainWindow::openSettings() {
-    QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("Cliprove settings"));
-    auto *layout = new QVBoxLayout(&dialog);
-    auto *form = new QFormLayout;
+    SettingsDialog dialog(settings_, store_, this);
+    dialog.setWindowIcon(Theme::windowIcon());
+    if (dialog.exec() != QDialog::Accepted)
+        return;
 
-    auto *batchInterval = new QSpinBox(&dialog);
-    batchInterval->setRange(200, 5000);
-    batchInterval->setSuffix(QStringLiteral(" ms"));
-    batchInterval->setValue(settings_.batchIntervalMs);
-    form->addRow(QStringLiteral("Delay between pasted items"), batchInterval);
-
-    auto *historyLimit = new QSpinBox(&dialog);
-    historyLimit->setRange(0, 100000);
-    historyLimit->setSpecialValueText(QStringLiteral("Unlimited"));
-    historyLimit->setValue(settings_.maxUnstarredEntries);
-    form->addRow(QStringLiteral("Keep unstarred history"), historyLimit);
-
-    auto *thumbnailSize = new QSpinBox(&dialog);
-    thumbnailSize->setRange(40, 128);
-    thumbnailSize->setSuffix(QStringLiteral(" px"));
-    thumbnailSize->setValue(settings_.thumbnailSize);
-    form->addRow(QStringLiteral("Thumbnail size"), thumbnailSize);
-
-    auto *showThumbnails = new QCheckBox(QStringLiteral("Show image thumbnails"), &dialog);
-    showThumbnails->setChecked(settings_.showThumbnails);
-    form->addRow(showThumbnails);
-
-    auto *clickToPaste = new QCheckBox(QStringLiteral("Single click pastes immediately"), &dialog);
-    clickToPaste->setChecked(settings_.clickToPaste);
-    form->addRow(clickToPaste);
-    layout->addLayout(form);
-
-    auto *hint = new QLabel(
-        QStringLiteral("Starred items are never removed by the history limit. "
-                       "Batch paste uses the visible list order."), &dialog);
-    hint->setWordWrap(true);
-    layout->addWidget(hint);
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addWidget(buttons);
-    if (dialog.exec() != QDialog::Accepted) return;
-
-    AppSettings next = settings_;
-    next.batchIntervalMs = batchInterval->value();
-    next.maxUnstarredEntries = historyLimit->value();
-    next.thumbnailSize = thumbnailSize->value();
-    next.showThumbnails = showThumbnails->isChecked();
-    next.clickToPaste = clickToPaste->isChecked();
+    const AppSettings next = dialog.settings();
     QString error;
     if (!store_->setMaxUnstarredEntries(next.maxUnstarredEntries, &error)) {
-        status_->setText(QStringLiteral("Settings failed: %1").arg(error));
+        showStatus(QStringLiteral("设置失败：%1").arg(error), true);
         return;
     }
     if (!next.save()) {
-        status_->setText(QStringLiteral("Settings could not be saved to disk."));
+        showStatus(QStringLiteral("设置无法保存到磁盘"), true);
         return;
     }
+
     settings_ = next;
+    applyVisualStyle();
     refresh();
+    showStatus(QStringLiteral("设置已保存"));
 }

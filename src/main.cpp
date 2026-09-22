@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QGuiApplication>
 #include <QIcon>
+#include <QFont>
 #include <QDir>
 #include <QLockFile>
 #include <QMenu>
@@ -21,6 +22,7 @@
 #include "platform/X11ClipboardBackend.h"
 #include "platform/X11PasteBackend.h"
 #include "ui/MainWindow.h"
+#include "ui/Theme.h"
 
 int main(int argc, char **argv) {
     std::signal(SIGPIPE, SIG_IGN);
@@ -29,6 +31,18 @@ int main(int argc, char **argv) {
     QApplication::setApplicationName(QStringLiteral("ClipTool"));
     QApplication::setApplicationDisplayName(QStringLiteral("Cliprove"));
     QApplication::setOrganizationName(QStringLiteral("veexi"));
+    QGuiApplication::setDesktopFileName(QStringLiteral("cliprove"));
+
+    QFont appFont = app.font();
+    appFont.setFamilies({
+        QStringLiteral("Noto Sans CJK SC"),
+        QStringLiteral("Noto Sans"),
+        QStringLiteral("sans-serif")
+    });
+    app.setFont(appFont);
+
+    QApplication::setWindowIcon(Theme::windowIcon());
+    Theme::apply(app);
 
     const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     if (!QDir().mkpath(dataDir)) {
@@ -105,9 +119,9 @@ int main(int argc, char **argv) {
     if (!pasteBackend->start(&pasteError))
         qWarning() << "Direct paste backend failed to start:" << pasteError;
 
-    QIcon trayIconImage = QIcon::fromTheme(QStringLiteral("edit-paste"));
+    QIcon trayIconImage = Theme::minimalIcon();
     if (trayIconImage.isNull())
-        trayIconImage = app.style()->standardIcon(QStyle::SP_FileIcon);
+        trayIconImage = Theme::appIcon();
     QMenu trayMenu;
     QSystemTrayIcon trayIcon(trayIconImage, &app);
     const auto showWindow = [&window] {
@@ -115,10 +129,13 @@ int main(int argc, char **argv) {
         window.raise();
         window.activateWindow();
     };
-    auto *openAction = trayMenu.addAction(QStringLiteral("Open Cliprove"));
+    auto *openAction = trayMenu.addAction(QStringLiteral("显示 Cliprove"));
     QObject::connect(openAction, &QAction::triggered, &window, showWindow);
+    auto *settingsAction = trayMenu.addAction(QStringLiteral("设置"));
+    QObject::connect(settingsAction, &QAction::triggered,
+                     &window, &MainWindow::openSettings);
     trayMenu.addSeparator();
-    auto *quitAction = trayMenu.addAction(QStringLiteral("Quit"));
+    auto *quitAction = trayMenu.addAction(QStringLiteral("退出"));
     QObject::connect(quitAction, &QAction::triggered, &app, &QApplication::quit);
     trayIcon.setContextMenu(&trayMenu);
     trayIcon.setToolTip(QStringLiteral("Cliprove"));
@@ -129,6 +146,8 @@ int main(int argc, char **argv) {
             showWindow();
     });
     trayIcon.show();
-    window.show();
+    if (!settings.startMinimized || !QSystemTrayIcon::isSystemTrayAvailable()) {
+        window.show();
+    }
     return app.exec();
 }

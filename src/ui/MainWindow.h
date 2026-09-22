@@ -11,7 +11,9 @@ class PasteBackend;
 class QLineEdit;
 class QListWidget;
 class QLabel;
+class QPushButton;
 class QShowEvent;
+class QCloseEvent;
 
 class MainWindow final : public QMainWindow {
     Q_OBJECT
@@ -25,14 +27,18 @@ public:
 
 public slots:
     void refresh();
+    void openSettings();
 
 protected:
     void showEvent(QShowEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
 
 private:
     void replayCurrent();
+    void applyVisualStyle();
+    void animateWindowIn();
+    void showStatus(const QString &message, bool error = false);
     void toggleStarred();
-    void openSettings();
     void loadVisibleThumbnails();
     void replayNext();
     void finishReplay(const QString &error = {});
@@ -45,7 +51,12 @@ private:
     QLineEdit *search_;
     QListWidget *list_;
     QLabel *status_;
+    QLabel *countLabel_;
+    QPushButton *starButton_;
+    QPushButton *replayButton_;
+    QPushButton *settingsButton_;
     AppSettings settings_;
+    bool hasAnimatedShow_ = false;
     QTimer replayTimer_;
     QVector<qint64> replayIds_;
     qsizetype replayIndex_ = 0;

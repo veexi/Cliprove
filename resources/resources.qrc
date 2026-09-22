@@ -1,0 +1,26 @@
+<RCC>
+  <qresource prefix="/">
+    <file>icons/cliprove.svg</file>
+    <file>icons/cliprove.png</file>
+    <file>icons/cliprove-64.png</file>
+    <file>icons/cliprove-minimal.svg</file>
+    <file>icons/cliprove-minimal-mono.svg</file>
+    <file>icons/cliprove-minimal.png</file>
+    <file>icons/cliprove-minimal-16.png</file>
+    <file>icons/cliprove-minimal-20.png</file>
+    <file>icons/cliprove-minimal-24.png</file>
+    <file>icons/cliprove-minimal-32.png</file>
+    <file>icons/cliprove-minimal-48.png</file>
+    <file>icons/cliprove-minimal-64.png</file>
+    <file>icons/cliprove-minimal-128.png</file>
+    <file>icons/cliprove-symbolic.png</file>
+    <file>icons/cliprove-symbolic-16.png</file>
+    <file>icons/cliprove-symbolic-20.png</file>
+    <file>icons/cliprove-symbolic-24.png</file>
+    <file>icons/cliprove-symbolic-32.png</file>
+    <file>icons/cliprove-symbolic-48.png</file>
+    <file>icons/cliprove-symbolic-64.png</file>
+    <file>icons/cliprove-symbolic-128.png</file>
+    <file>icons/cliprove-tray.svg</file>
+  </qresource>
+</RCC>

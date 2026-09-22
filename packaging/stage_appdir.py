@@ -97,6 +97,8 @@ def stage(executable: Path, appdir: Path) -> None:
     apprun.chmod(0o755)
     shutil.copy2(project / "packaging/cliprove.desktop", desktop_dir / "cliprove.desktop")
     shutil.copy2(project / "packaging/cliprove.png", icon_dir / "cliprove.png")
+    shutil.copy2(project / "packaging/cliprove-minimal.png",
+                 icon_dir / "cliprove-minimal.png")
     os.symlink("usr/share/applications/cliprove.desktop", appdir / "cliprove.desktop")
     os.symlink("usr/share/icons/hicolor/256x256/apps/cliprove.png", appdir / "cliprove.png")
     os.symlink("cliprove.png", appdir / ".DirIcon")

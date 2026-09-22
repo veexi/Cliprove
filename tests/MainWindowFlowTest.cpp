@@ -63,10 +63,7 @@ int main(int argc, char **argv) {
     if (!list || list->count() != 2) return 5;
     list->item(0)->setSelected(true);
     list->item(1)->setSelected(true);
-    QPushButton *pasteButton = nullptr;
-    for (auto *button : window.findChildren<QPushButton *>()) {
-        if (button->text().startsWith(QStringLiteral("Paste selected"))) pasteButton = button;
-    }
+    auto *pasteButton = window.findChild<QPushButton *>(QStringLiteral("pasteButton"));
     if (!pasteButton) return 6;
     pasteButton->click();
 
