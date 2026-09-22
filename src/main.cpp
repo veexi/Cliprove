@@ -21,6 +21,7 @@
 int main(int argc, char **argv) {
     std::signal(SIGPIPE, SIG_IGN);
     QApplication app(argc, argv);
+    app.setQuitOnLastWindowClosed(!QSystemTrayIcon::isSystemTrayAvailable());
     QApplication::setApplicationName(QStringLiteral("ClipTool"));
     QApplication::setApplicationDisplayName(QStringLiteral("Cliprove"));
     QApplication::setOrganizationName(QStringLiteral("veexi"));

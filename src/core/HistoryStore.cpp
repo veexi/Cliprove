@@ -3,6 +3,7 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFileInfo>
+#include <QSqlRecord>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QStandardPaths>
@@ -35,7 +36,8 @@ bool HistoryStore::open(QString *error) {
                 "created_at INTEGER NOT NULL,"
                 "summary TEXT NOT NULL,"
                 "formats TEXT NOT NULL,"
-                "content_hash BLOB NOT NULL)") ||
+                "content_hash BLOB NOT NULL,"
+                "starred INTEGER NOT NULL DEFAULT 0)") ||
         !q.exec("CREATE INDEX IF NOT EXISTS idx_entries_created ON entries(created_at DESC)") ||
         !q.exec("CREATE INDEX IF NOT EXISTS idx_entries_hash ON entries(content_hash)") ||
         !q.exec("CREATE TABLE IF NOT EXISTS payloads ("
@@ -44,6 +46,12 @@ bool HistoryStore::open(QString *error) {
                 "data BLOB NOT NULL,"
                 "PRIMARY KEY(entry_id,mime),"
                 "FOREIGN KEY(entry_id) REFERENCES entries(id) ON DELETE CASCADE)")) {
+        if (error) *error = q.lastError().text();
+        return false;
+    }
+
+    if (db_.record(QStringLiteral("entries")).indexOf(QStringLiteral("starred")) < 0 &&
+        !q.exec("ALTER TABLE entries ADD COLUMN starred INTEGER NOT NULL DEFAULT 0")) {
         if (error) *error = q.lastError().text();
         return false;
     }
@@ -139,12 +147,13 @@ QVector<ClipboardEntry> HistoryStore::recentEntries(int limit, const QString &se
     QVector<ClipboardEntry> out;
     QSqlQuery q(db_);
     if (search.trimmed().isEmpty()) {
-        q.prepare("SELECT id,created_at,summary,formats,content_hash FROM entries "
-                  "ORDER BY id DESC LIMIT ?");
+        q.prepare("SELECT id,created_at,summary,formats,content_hash,starred FROM entries "
+                  "ORDER BY starred DESC,id DESC LIMIT ?");
         q.addBindValue(limit);
     } else {
-        q.prepare("SELECT id,created_at,summary,formats,content_hash FROM entries "
-                  "WHERE summary LIKE ? OR formats LIKE ? ORDER BY id DESC LIMIT ?");
+        q.prepare("SELECT id,created_at,summary,formats,content_hash,starred FROM entries "
+                  "WHERE summary LIKE ? OR formats LIKE ? "
+                  "ORDER BY starred DESC,id DESC LIMIT ?");
         const QString term = "%" + search.trimmed() + "%";
         q.addBindValue(term);
         q.addBindValue(term);
@@ -159,9 +168,23 @@ QVector<ClipboardEntry> HistoryStore::recentEntries(int limit, const QString &se
         e.summary = q.value(2).toString();
         e.formats = q.value(3).toString();
         e.contentHash = q.value(4).toByteArray();
+        e.starred = q.value(5).toBool();
         out.push_back(std::move(e));
     }
     return out;
+}
+
+bool HistoryStore::setStarred(qint64 entryId, bool starred, QString *error) {
+    QSqlQuery q(db_);
+    q.prepare("UPDATE entries SET starred=? WHERE id=?");
+    q.addBindValue(starred ? 1 : 0);
+    q.addBindValue(entryId);
+    if (!q.exec() || q.numRowsAffected() != 1) {
+        if (error) *error = q.lastError().text().isEmpty()
+            ? QStringLiteral("History item not found") : q.lastError().text();
+        return false;
+    }
+    return true;
 }
 
 MimePayloads HistoryStore::payloadsFor(qint64 entryId) const {

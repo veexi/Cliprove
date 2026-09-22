@@ -63,3 +63,16 @@ target_link_libraries(cliptool PRIVATE
 
 target_compile_options(cliptool PRIVATE -Wall -Wextra -Wpedantic)
 install(TARGETS cliptool RUNTIME DESTINATION bin)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(history-store-test
+        tests/HistoryStoreTest.cpp
+        src/core/ClipboardTypes.h
+        src/core/HistoryStore.h
+        src/core/HistoryStore.cpp
+    )
+    target_include_directories(history-store-test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    target_link_libraries(history-store-test PRIVATE Qt6::Core Qt6::Sql)
+    add_test(NAME history-store-test COMMAND history-store-test)
+endif()

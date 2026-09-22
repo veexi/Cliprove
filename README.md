@@ -7,6 +7,7 @@ Cliprove is an experimental native clipboard history manager for Linux. It saves
 - KDE Plasma on Wayland: clipboard capture, multi-format history, search, restore, and direct paste have been tested.
 - X11: Qt clipboard capture and XTest direct paste passed an isolated Xvfb/Openbox end-to-end test; testing on a regular X11 desktop remains to be done.
 - GNOME on Wayland: a Clipboard Portal backend is experimental and is not yet connected as a fallback.
+- Starred entries are stored in SQLite and shown first. Right-click an entry to star it, or select it and press Ctrl+D. Clicking an entry restores it, hides the window, and requests direct paste. These new UI interactions still need a KDE desktop acceptance test.
 
 The window is named Cliprove. The executable and application data directory still use the development name `ClipTool`, preserving the existing history under `veexi/ClipTool`.
 
@@ -30,3 +31,5 @@ On the current SteamOS development machine, build inside the `cliptool-dev` dist
 - `protocols`: Wayland `ext-data-control-v1` protocol definition.
 
 The active Wayland path uses `ext-data-control-v1` for clipboard access and the RemoteDesktop Portal with libei for direct paste. Experimental Portal clipboard and D-Bus paste code is present but is not part of the current build.
+
+The initial release target is KDE Plasma on Wayland and X11. GNOME Portal fallback is deferred. Multi-entry paste, image thumbnails, settings and release packaging are still pending. File history stores clipboard metadata such as file URIs, not file contents.

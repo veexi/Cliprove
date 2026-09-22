@@ -15,6 +15,7 @@ public:
     qint64 addEntry(const MimePayloads &payloads, QString *error = nullptr);
     QVector<ClipboardEntry> recentEntries(int limit = 1000, const QString &search = {}) const;
     MimePayloads payloadsFor(qint64 entryId) const;
+    bool setStarred(qint64 entryId, bool starred, QString *error = nullptr);
 
 private:
     QString makeSummary(const MimePayloads &payloads) const;

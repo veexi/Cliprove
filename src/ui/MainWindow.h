@@ -20,6 +20,7 @@ public slots:
 
 private:
     void replayCurrent();
+    void toggleStarred();
 
     HistoryStore *store_;
     ClipboardBackend *backend_;
