@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Cliprove
+Comment=Clipboard history for KDE Plasma
+Exec=cliptool
+Icon=cliprove
+Categories=Utility;
+Terminal=false
+StartupNotify=true
