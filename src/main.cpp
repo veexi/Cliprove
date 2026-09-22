@@ -3,13 +3,17 @@
 #include <QDebug>
 #include <QGuiApplication>
 #include <QIcon>
+#include <QDir>
+#include <QLockFile>
 #include <QMenu>
 #include <QStyle>
 #include <QSystemTrayIcon>
+#include <QStandardPaths>
 #include <csignal>
 #include <memory>
 
 #include "core/HistoryStore.h"
+#include "core/AppSettings.h"
 #include "platform/ClipboardBackend.h"
 #include "platform/PasteBackend.h"
 #include "platform/PortalEisPasteBackend.h"
@@ -26,11 +30,30 @@ int main(int argc, char **argv) {
     QApplication::setApplicationDisplayName(QStringLiteral("Cliprove"));
     QApplication::setOrganizationName(QStringLiteral("veexi"));
 
+    const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (!QDir().mkpath(dataDir)) {
+        QMessageBox::critical(nullptr, QStringLiteral("Cliprove"),
+                              QStringLiteral("Could not create application data directory."));
+        return 2;
+    }
+    QLockFile instanceLock(dataDir + QStringLiteral("/cliprove.lock"));
+    if (!instanceLock.tryLock(0)) {
+        QMessageBox::warning(nullptr, QStringLiteral("Cliprove"),
+                             QStringLiteral("Cliprove is already running, or its lock is unavailable."));
+        return 2;
+    }
+
     HistoryStore store;
     QString error;
     if (!store.open(&error)) {
         QMessageBox::critical(nullptr, QStringLiteral("ClipTool"),
                               QStringLiteral("History database failed: %1").arg(error));
+        return 2;
+    }
+    const AppSettings settings = AppSettings::load();
+    if (!store.setMaxUnstarredEntries(settings.maxUnstarredEntries, &error)) {
+        QMessageBox::critical(nullptr, QStringLiteral("Cliprove"),
+                              QStringLiteral("History cleanup failed: %1").arg(error));
         return 2;
     }
 
@@ -47,7 +70,7 @@ int main(int argc, char **argv) {
         pasteBackend = std::make_unique<PortalEisPasteBackend>();
     }
 
-    MainWindow window(&store, backend.get(), pasteBackend.get());
+    MainWindow window(&store, backend.get(), pasteBackend.get(), settings);
     QObject::connect(backend.get(), &ClipboardBackend::clipboardCaptured,
                      &window, [&](const MimePayloads &payloads) {
         if (payloads.size() == 1 &&
@@ -55,9 +78,12 @@ int main(int argc, char **argv) {
             return;
         QString dbError;
         const qint64 id = store.addEntry(payloads, &dbError);
-        if (id < 0)
-            qWarning() << "History insert failed:" << dbError;
         window.refresh();
+        window.onClipboardCaptured();
+        if (id < 0) {
+            qWarning() << "History insert failed:" << dbError;
+            window.showStoreError(dbError);
+        }
     });
 
     if (!backend->start(&error)) {

@@ -28,6 +28,7 @@ add_custom_command(
 
 add_executable(cliptool
     src/main.cpp
+    src/core/AppSettings.h
     src/core/ClipboardTypes.h
     src/core/HistoryStore.h
     src/core/HistoryStore.cpp
@@ -73,6 +74,21 @@ if(BUILD_TESTING)
         src/core/HistoryStore.cpp
     )
     target_include_directories(history-store-test PRIVATE "${CMAKE_SOURCE_DIR}/src")
-    target_link_libraries(history-store-test PRIVATE Qt6::Core Qt6::Sql)
+    target_link_libraries(history-store-test PRIVATE Qt6::Core Qt6::Gui Qt6::Sql)
     add_test(NAME history-store-test COMMAND history-store-test)
+
+    add_executable(main-window-flow-test
+        tests/MainWindowFlowTest.cpp
+        src/core/ClipboardTypes.h
+        src/core/HistoryStore.h
+        src/core/HistoryStore.cpp
+        src/platform/ClipboardBackend.h
+        src/platform/PasteBackend.h
+        src/ui/MainWindow.h
+        src/ui/MainWindow.cpp
+    )
+    target_include_directories(main-window-flow-test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    target_link_libraries(main-window-flow-test PRIVATE
+        Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Sql)
+    add_test(NAME main-window-flow-test COMMAND main-window-flow-test)
 endif()
