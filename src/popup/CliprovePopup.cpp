@@ -51,7 +51,11 @@ public:
         engine_.setInitializationDelayed(true);
         connect(&engine_, &PlasmaQuick::SharedQmlEngine::finished,
                 this, &CliprovePopup::onObjectIncubated);
+#if PLASMA_VERSION_MAJOR > 6 || (PLASMA_VERSION_MAJOR == 6 && PLASMA_VERSION_MINOR >= 7)
         engine_.setSource(QUrl(QStringLiteral("qrc:/cliprove/popup/CliprovePopup.qml")));
+#else
+        engine_.setSource(QUrl(QStringLiteral("qrc:/cliprove/popup/legacy/CliprovePopup.qml")));
+#endif
         engine_.completeInitialization();
 
         setTitle(QStringLiteral("Cliprove"));
@@ -292,6 +296,10 @@ int main(int argc, char **argv)
     showAction.setObjectName(QStringLiteral("show-cliprove"));
     showAction.setText(QStringLiteral("Show Cliprove"));
     KGlobalAccel::setGlobalShortcut(&showAction, QKeySequence(QStringLiteral("Meta+V")));
+    KGlobalAccel::self()->setShortcut(
+        &showAction,
+        {QKeySequence(QStringLiteral("Meta+V"))},
+        KGlobalAccel::NoAutoloading);
     QObject::connect(&showAction, &QAction::triggered, &popup, &CliprovePopup::toggle);
 
     auto bus = QDBusConnection::sessionBus();

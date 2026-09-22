@@ -10,4 +10,15 @@
     <file alias="EditPage.qml">../plasmoid/contents/ui/EditPage.qml</file>
     <file alias="BarcodePage.qml">../plasmoid/contents/ui/BarcodePage.qml</file>
   </qresource>
+  <qresource prefix="/cliprove/popup/legacy">
+    <file alias="CliprovePopup.qml">../src/popup/legacy/CliprovePopup.qml</file>
+    <file alias="ClipboardMenu.qml">../src/popup/legacy/ClipboardMenu.qml</file>
+    <file alias="ClipboardItemDelegate.qml">../plasmoid/contents/ui/ClipboardItemDelegate.qml</file>
+    <file alias="DelegateToolButtons.qml">../plasmoid/contents/ui/DelegateToolButtons.qml</file>
+    <file alias="TextItemDelegate.qml">../plasmoid/contents/ui/TextItemDelegate.qml</file>
+    <file alias="ImageItemDelegate.qml">../plasmoid/contents/ui/ImageItemDelegate.qml</file>
+    <file alias="UrlItemDelegate.qml">../plasmoid/contents/ui/UrlItemDelegate.qml</file>
+    <file alias="EditPage.qml">../src/popup/legacy/EditPage.qml</file>
+    <file alias="BarcodePage.qml">../src/popup/legacy/BarcodePage.qml</file>
+  </qresource>
 </RCC>
