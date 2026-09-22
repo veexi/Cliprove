@@ -48,6 +48,12 @@ This installs two user services:
 
 The installer also disables KDE's stock `show-on-mouse-pos` Meta+V shortcut so there is no conflict.
 
+### SteamOS
+
+SteamOS uses the same `main` source, but its immutable base system and older Plasma runtime require a local development sysroot plus a few compatibility details. The first successful SteamOS 3.8.16 / Plasma 6.4.3 port is documented in detail in [docs/STEAMOS.md](docs/STEAMOS.md), including the exact sysroot build flow, Plasma 6.4 QML/API differences, KWin position handling, Meta+V registration, paste portal verification, and a fast rebuild checklist for future OS updates.
+
+Read that document before debugging a SteamOS rebuild from scratch.
+
 ## AppImage
 
 A KDE-Plasma-specific AppImage can be built with `packaging/stage_appdir.py`. It intentionally uses the host Plasma/Qt/KF6 runtime because Cliprove imports KDE's private clipboard QML module and must stay ABI-compatible with the installed Plasma version.
