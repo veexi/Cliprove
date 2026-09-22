@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <Plasma/Plasma>
+#include <Plasma/plasma_version.h>
 #include <PlasmaQuick/PlasmaWindow>
 #include <PlasmaQuick/SharedQmlEngine>
 
@@ -37,7 +38,9 @@ public:
     CliprovePopup()
         : PlasmaQuick::PlasmaWindow()
     {
+#if PLASMA_VERSION_MAJOR > 6 || (PLASMA_VERSION_MAJOR == 6 && PLASMA_VERSION_MINOR >= 7)
         Plasma::setupPlasmaStyle(engine_.engine().get());
+#endif
         connect(engine_.engine().get(), &QQmlEngine::warnings, this, [](const QList<QQmlError> &warnings) {
             for (const auto &warning : warnings)
                 qWarning().noquote() << warning.toString();
