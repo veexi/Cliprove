@@ -3,7 +3,8 @@
 Cliprove is a KDE Plasma 6 clipboard popup based on KDE's Klipper/Clipboard QML, with two behavioral changes:
 
 - click a history item to paste it directly into the previously focused application;
-- hold **Ctrl** and click multiple items, then press **Enter** to paste them in list order.
+- hold **Ctrl** and click multiple text items, release Ctrl, then press **Enter** to paste them together in list order, separated by newlines.
+- select multiple images the same way to paste each image separately, in list order, from one Enter press.
 
 Everything else intentionally stays close to KDE Clipboard: search, starred items, editing, QR/barcode actions, history model, Plasma styling, and theme integration.
 
@@ -14,6 +15,20 @@ Cliprove owns **Meta+V** directly through KDE GlobalAccel. It does not use a pan
 On first launch the popup is centered on the active display. If you move it, the position is saved and restored the next time it opens.
 
 The popup is a native `PlasmaQuick::PlasmaWindow`. Direct paste is injected through the XDG RemoteDesktop portal and libei.
+
+The original window is remembered before opening the popup. Konsole and recognized terminal applications receive **Ctrl+Shift+V**; other applications receive **Ctrl+V**. For an embedded terminal (for example in an editor), use **Shift+click** or **Shift+Enter** to force Ctrl+Shift+V. Release the modifier keys to complete the paste. These shortcuts assume the target application's default paste bindings.
+
+Single text and file entries use Klipper's original MIME formats. Images are restored as PNG. An image batch keeps each image on the clipboard until a read is observed after the paste shortcut, with a short interval between items. Reopening the popup cancels the remaining queue; changing the target window or an unread item stops the queue with an error. Multiple file entries are not yet combined.
+
+When pasting images into a terminal application such as Codex, the image shortcut is Ctrl+V; terminal text still uses Ctrl+Shift+V. The target application must support pasted images.
+
+The per-user installer registers `org.veexi.cliprove-popup.desktop` with an absolute executable path and KDE's window-management interface declaration. This is required for target-window detection and terminal shortcut selection.
+
+The helper starts with the graphical session and retries transient portal failures with a bounded backoff. Failed paste requests are shown in the popup. No delayed paste is queued while permission is unavailable; allow the keyboard-control prompt and click again.
+
+## Regression tests
+
+With `BUILD_TESTING=ON` and Qt Test installed, build `paste-controller-test` and run `ctest -R paste-controller-test --output-on-failure`. It uses a private D-Bus session and an offscreen clipboard. For mouse-selection tests, run the **Qt 6** `qmltestrunner -platform offscreen -input tests/qml` with `QT_QUICK_BACKEND=software`.
 
 ## Upstream
 

@@ -6,11 +6,27 @@
 #include <libei.h>
 #include <liboeffis.h>
 #include <linux/input-event-codes.h>
+#include <algorithm>
 
 PortalEisPasteBackend::PortalEisPasteBackend(QObject *parent)
-    : PasteBackend(parent) {}
+    : PasteBackend(parent) {
+    reconnectTimer_.setSingleShot(true);
+    connect(&reconnectTimer_, &QTimer::timeout, this, [this] {
+        resetPortal();
+        QString error;
+        if (!start(&error)) {
+            emit statusChanged(error);
+            scheduleReconnect();
+        }
+    });
+}
 
 PortalEisPasteBackend::~PortalEisPasteBackend() {
+    resetPortal();
+}
+
+void PortalEisPasteBackend::resetPortal() {
+    reconnectTimer_.stop();
     resetEi();
     if (portalNotifier_) {
         portalNotifier_->setEnabled(false);
@@ -20,6 +36,13 @@ PortalEisPasteBackend::~PortalEisPasteBackend() {
     if (portal_) {
         portal_ = oeffis_unref(portal_);
     }
+    started_ = false;
+}
+
+void PortalEisPasteBackend::scheduleReconnect() {
+    if (reconnectTimer_.isActive()) return;
+    reconnectTimer_.start(reconnectDelay_);
+    reconnectDelay_ = std::min(reconnectDelay_ * 2, 30000);
 }
 
 QString PortalEisPasteBackend::backendName() const {
@@ -49,7 +72,9 @@ bool PortalEisPasteBackend::start(QString *error) {
     emit statusChanged(QStringLiteral("Waiting for keyboard input permission..."));
     oeffis_create_session(portal_, OEFFIS_DEVICE_KEYBOARD);
     return true;
-}void PortalEisPasteBackend::onOeffisReadable() {
+}
+
+void PortalEisPasteBackend::onOeffisReadable() {
     if (!portal_) return;
 
     oeffis_dispatch(portal_);
@@ -62,17 +87,20 @@ bool PortalEisPasteBackend::start(QString *error) {
             const int fd = oeffis_get_eis_fd(portal_);
             if (fd < 0) {
                 emit statusChanged(QStringLiteral("Portal connected, but no EIS fd"));
-                continue;
+                resetPortal();
+                scheduleReconnect();
+                return;
             }
 
             resetEi();
             ei_ = ei_new_sender(this);
-            ei_configure_name(ei_, "ClipTool");
+            ei_configure_name(ei_, "Cliprove");
             const int rc = ei_setup_backend_fd(ei_, fd);
             if (rc < 0) {
                 emit statusChanged(QStringLiteral("libei backend setup failed: %1").arg(rc));
-                resetEi();
-                continue;
+                resetPortal();
+                scheduleReconnect();
+                return;
             }
 
             eiNotifier_ = new QSocketNotifier(
@@ -84,16 +112,28 @@ bool PortalEisPasteBackend::start(QString *error) {
         } else if (event == OEFFIS_EVENT_CLOSED) {
             setReady(false);
             emit statusChanged(QStringLiteral("Input permission session closed"));
-            resetEi();
+            // An intentional closure must not reopen permission dialogs.
+            resetPortal();
+            return;
         } else if (event == OEFFIS_EVENT_DISCONNECTED) {
             setReady(false);
             const char *message = oeffis_get_error_message(portal_);
+            const QString reason = QString::fromUtf8(message ? message : "unknown error");
             emit statusChanged(QStringLiteral("Portal disconnected: %1")
-                               .arg(QString::fromUtf8(message ? message : "unknown error")));
-            resetEi();
+                               .arg(reason));
+            resetPortal();
+            // A refused permission request needs a new explicit user action,
+            // not a series of automatically reopened permission dialogs.
+            if (!reason.contains(QStringLiteral("denied"), Qt::CaseInsensitive)
+                && !reason.contains(QStringLiteral("cancel"), Qt::CaseInsensitive)
+                && !reason.contains(QStringLiteral("rejected"), Qt::CaseInsensitive))
+                scheduleReconnect();
+            return;
         }
     }
-}void PortalEisPasteBackend::onEiReadable() {
+}
+
+void PortalEisPasteBackend::onEiReadable() {
     processEiEvents();
 }
 
@@ -125,10 +165,13 @@ void PortalEisPasteBackend::processEiEvents() {
                 emit statusChanged(QStringLiteral("Keyboard injection device found"));
             }
             break;
-        }        case EI_EVENT_DEVICE_RESUMED: {
+        }
+        case EI_EVENT_DEVICE_RESUMED: {
             auto *device = ei_event_get_device(event);
             if (device && device == keyboard_) {
                 keyboardResumed_ = true;
+                reconnectDelay_ = 1000;
+                reconnectTimer_.stop();
                 setReady(true);
                 emit statusChanged(QStringLiteral("Direct paste ready"));
             }
@@ -155,23 +198,34 @@ void PortalEisPasteBackend::processEiEvents() {
         }
         case EI_EVENT_DISCONNECT:
             setReady(false);
+            keyboardResumed_ = false;
+            if (eiNotifier_) eiNotifier_->setEnabled(false);
             emit statusChanged(QStringLiteral("libei disconnected"));
+            // Defer teardown until after the event has been released. A CLOSED
+            // portal event arriving meanwhile cancels this retry.
+            scheduleReconnect();
             break;
         default:
             break;
         }
         ei_event_unref(event);
     }
-}bool PortalEisPasteBackend::paste(QString *error) {
+}
+
+bool PortalEisPasteBackend::paste(QString *error) {
+    return pasteWithShift(false, error);
+}
+
+bool PortalEisPasteBackend::pasteWithShift(bool shift, QString *error) {
     if (!ready_ || !keyboard_ || !keyboardResumed_) {
         if (error)
             *error = QStringLiteral("Keyboard injection is not ready");
         return false;
     }
-    return sendCtrlV(error);
+    return sendCtrlV(shift, error);
 }
 
-bool PortalEisPasteBackend::sendCtrlV(QString *error) {
+bool PortalEisPasteBackend::sendCtrlV(bool shift, QString *error) {
     if (!keyboard_) {
         if (error) *error = QStringLiteral("No keyboard device");
         return false;
@@ -182,17 +236,27 @@ bool PortalEisPasteBackend::sendCtrlV(QString *error) {
     ei_device_keyboard_key(keyboard_, KEY_LEFTCTRL, true);
     ei_device_frame(keyboard_, ei_now(ei_));
 
+    if (shift) {
+        ei_device_keyboard_key(keyboard_, KEY_LEFTSHIFT, true);
+        ei_device_frame(keyboard_, ei_now(ei_));
+    }
+
     ei_device_keyboard_key(keyboard_, KEY_V, true);
     ei_device_frame(keyboard_, ei_now(ei_));
 
     ei_device_keyboard_key(keyboard_, KEY_V, false);
     ei_device_frame(keyboard_, ei_now(ei_));
 
+    if (shift) {
+        ei_device_keyboard_key(keyboard_, KEY_LEFTSHIFT, false);
+        ei_device_frame(keyboard_, ei_now(ei_));
+    }
+
     ei_device_keyboard_key(keyboard_, KEY_LEFTCTRL, false);
     ei_device_frame(keyboard_, ei_now(ei_));
 
     ei_device_stop_emulating(keyboard_);
-    emit statusChanged(QStringLiteral("Ctrl+V injected"));
+    emit statusChanged(shift ? QStringLiteral("Ctrl+Shift+V injected") : QStringLiteral("Ctrl+V injected"));
     return true;
 }
 
@@ -200,7 +264,9 @@ void PortalEisPasteBackend::setReady(bool ready) {
     if (ready_ == ready) return;
     ready_ = ready;
     emit readyChanged(ready_);
-}void PortalEisPasteBackend::resetEi() {
+}
+
+void PortalEisPasteBackend::resetEi() {
     setReady(false);
     keyboardResumed_ = false;
 

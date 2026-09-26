@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PasteBackend.h"
+#include <QTimer>
 
 struct oeffis;
 struct ei;
@@ -16,6 +17,7 @@ public:
 
     bool start(QString *error = nullptr) override;
     bool paste(QString *error = nullptr) override;
+    bool pasteWithShift(bool shift, QString *error = nullptr);
     bool isReady() const override;
     QString backendName() const override;
 
@@ -25,7 +27,9 @@ private:
     void processEiEvents();
     void setReady(bool ready);
     void resetEi();
-    bool sendCtrlV(QString *error);
+    void resetPortal();
+    void scheduleReconnect();
+    bool sendCtrlV(bool shift, QString *error);
 
     oeffis *portal_ = nullptr;
     ei *ei_ = nullptr;
@@ -36,4 +40,6 @@ private:
     bool ready_ = false;
     bool keyboardResumed_ = false;
     uint32_t sequence_ = 1;
+    QTimer reconnectTimer_;
+    int reconnectDelay_ = 1000;
 };

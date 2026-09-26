@@ -34,8 +34,7 @@ PlasmaComponents.ItemDelegate {
 
     readonly property alias dragHandler: dragHandler
     property alias mainItem: label.contentItem
-    property bool ctrlClickInProgress: false
-    readonly property bool multiSelected: menuItem.ListView.view ? (menuItem.ListView.view.parent as ClipboardMenu).isMultiSelected(uuid) : false
+    readonly property bool multiSelected: menuItem.ListView.view ? menuItem.ListView.view.clipboardMenu.isMultiSelected(uuid) : false
 
     readonly property real gradientThreshold: (label.width - toolButtonsLoader.width) / label.width
     // Consider tall to be > about 1.5x the default height for purposes of top-aligning
@@ -66,42 +65,35 @@ PlasmaComponents.ItemDelegate {
 
     enabled: true
 
-    onClicked: {
-        if (!menuItem.ctrlClickInProgress) {
-            menuItem.itemSelected();
-        }
-    }
+    onClicked: menuItem.itemSelected()
 
-    TapHandler {
-        id: ctrlClickHandler
-        enabled: !(toolButtonsLoader.item as DelegateToolButtons)?.hovered
+    // A Ctrl press has one owner. Competing TapHandlers on the delegate and
+    // its text mask can otherwise consume the tap without selecting anything.
+    MouseArea {
+        anchors.fill: parent
+        z: 100
         acceptedButtons: Qt.LeftButton
-        acceptedModifiers: Qt.ControlModifier
-        gesturePolicy: TapHandler.ReleaseWithinBounds
-        onPressedChanged: {
-            if (pressed) {
-                menuItem.ctrlClickInProgress = true;
-            } else {
-                Qt.callLater(() => menuItem.ctrlClickInProgress = false);
-            }
+        onPressed: mouse => {
+            mouse.accepted = !!(mouse.modifiers & Qt.ControlModifier)
+                && !(toolButtonsLoader.item as DelegateToolButtons)?.hovered
+                && !(expandButtonLoader.item as PlasmaComponents.ToolButton)?.hovered;
         }
-        onTapped: menuItem.toggleMultiSelection()
+        onClicked: menuItem.toggleMultiSelection()
     }
 
-    onItemSelected: (menuItem.ListView.view.parent as ClipboardMenu).itemSelected(uuid)
-    onToggleMultiSelection: (menuItem.ListView.view.parent as ClipboardMenu).toggleMultiSelection(uuid, index)
-    onRemove: (menuItem.ListView.view.parent as ClipboardMenu).remove(uuid)
-    onEdit: (menuItem.ListView.view.parent as ClipboardMenu).edit(model)
-    onBarcode: (menuItem.ListView.view.parent as ClipboardMenu).barcode(model.display)
-    onTriggerAction: (menuItem.ListView.view.parent as ClipboardMenu).triggerAction(uuid)
+    onItemSelected: menuItem.ListView.view.clipboardMenu.itemSelected(uuid)
+    onToggleMultiSelection: menuItem.ListView.view.clipboardMenu.toggleMultiSelection(uuid, index)
+    onRemove: menuItem.ListView.view.clipboardMenu.remove(uuid)
+    onEdit: menuItem.ListView.view.clipboardMenu.edit(model)
+    onBarcode: menuItem.ListView.view.clipboardMenu.barcode(model.display)
+    onTriggerAction: menuItem.ListView.view.clipboardMenu.triggerAction(uuid)
 
     Accessible.onPressAction: menuItem.itemSelected()
     Keys.onEnterPressed: event => Keys.returnPressed(event)
     Keys.onReturnPressed: event => {
-        const clipboardMenu = menuItem.ListView.view.parent as ClipboardMenu;
+        const clipboardMenu = menuItem.ListView.view.clipboardMenu;
         if (clipboardMenu.selectedUuids.length > 0) {
             const uuids = clipboardMenu.selectedUuidList();
-            clipboardMenu.clearMultiSelection();
             clipboardMenu.pasteSelection(uuids);
             event.accepted = true;
         } else {
@@ -166,6 +158,7 @@ PlasmaComponents.ItemDelegate {
         visible: !!source && menuItem.ListView.isCurrentItem
 
         TapHandler {
+            acceptedModifiers: Qt.NoModifier
             enabled: !(toolButtonsLoader.item as DelegateToolButtons)?.hovered // https://bugreports.qt.io/browse/QTBUG-108821
             onTapped: {
                 menuItem.clicked() // https://bugreports.qt.io/browse/QTBUG-63395

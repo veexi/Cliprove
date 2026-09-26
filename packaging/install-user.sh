@@ -13,6 +13,12 @@ cmake --build "$BUILD_DIR" --target cliprove-popup cliprove-paste-daemon -j"$JOB
 install -Dm755 "$BUILD_DIR/cliprove-popup" "$HOME/.local/bin/cliprove-popup"
 install -Dm755 "$BUILD_DIR/cliprove-paste-daemon" "$HOME/.local/bin/cliprove-paste-daemon"
 install -Dm755 "$ROOT/packaging/cliprove-shortcut-fix.sh" "$HOME/.local/bin/cliprove-shortcut-fix"
+install -Dm644 "$ROOT/packaging/org.veexi.cliprove-popup.desktop" "$HOME/.local/share/applications/org.veexi.cliprove-popup.desktop"
+# KWin matches the real executable path when granting window-management access.
+sed -i "s|^Exec=.*|Exec=$HOME/.local/bin/cliprove-popup|" "$HOME/.local/share/applications/org.veexi.cliprove-popup.desktop"
+if command -v kbuildsycoca6 >/dev/null 2>&1; then
+    kbuildsycoca6 --noincremental >/dev/null 2>&1
+fi
 
 install -Dm644 "$ROOT/packaging/cliprove-popup.service" "$HOME/.config/systemd/user/cliprove-popup.service"
 install -Dm644 "$ROOT/packaging/cliprove-paste-daemon.service" "$HOME/.config/systemd/user/cliprove-paste-daemon.service"

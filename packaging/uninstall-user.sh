@@ -10,6 +10,7 @@ fi
 rm -f "$HOME/.local/bin/cliprove-popup" \
       "$HOME/.local/bin/cliprove-paste-daemon" \
       "$HOME/.local/bin/cliprove-shortcut-fix" \
+      "$HOME/.local/share/applications/org.veexi.cliprove-popup.desktop" \
       "$HOME/.config/systemd/user/cliprove-popup.service" \
       "$HOME/.config/systemd/user/cliprove-paste-daemon.service" \
       "$HOME/.config/systemd/user/plasma-plasmashell.service.d/90-cliprove-shortcut.conf"

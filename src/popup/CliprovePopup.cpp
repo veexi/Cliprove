@@ -7,6 +7,7 @@
 
 #include <KWayland/Client/connection_thread.h>
 #include <KWayland/Client/plasmashell.h>
+#include <KWayland/Client/plasmawindowmanagement.h>
 #include <KWayland/Client/registry.h>
 #include <KWayland/Client/surface.h>
 #include <KGlobalAccel>
@@ -21,13 +22,18 @@
 #include <QGuiApplication>
 #include <QEventLoopLocker>
 #include <QQmlEngine>
+#include <QQmlContext>
+#include <QPointer>
 #include <QQuickItem>
 #include <QScreen>
 #include <QSettings>
 #include <QTimer>
+#include <QThread>
 
 #include <algorithm>
 #include <memory>
+#include "PasteController.h"
+#include "../platform/WaylandDataControlBackend.h"
 
 using namespace Qt::StringLiterals;
 
@@ -38,6 +44,41 @@ public:
     CliprovePopup()
         : PlasmaQuick::PlasmaWindow()
     {
+        engine_.engine()->rootContext()->setContextProperty(QStringLiteral("pasteController"), &pasteController_);
+        clipboardWriter_ = new WaylandDataControlBackend;
+        clipboardWriter_->setCaptureEnabled(false);
+        clipboardWriter_->moveToThread(&clipboardThread_);
+        connect(&clipboardThread_, &QThread::finished, clipboardWriter_, &QObject::deleteLater);
+        clipboardThread_.start();
+        QString clipboardError;
+        bool clipboardReady = false;
+        QMetaObject::invokeMethod(clipboardWriter_, [this, &clipboardReady, &clipboardError] {
+            clipboardReady = clipboardWriter_->start(&clipboardError);
+        }, Qt::BlockingQueuedConnection);
+        if (clipboardReady) {
+            pasteController_.publishPayload = [this](const MimePayloads &payloads, QString *error) {
+                bool result = false;
+                QMetaObject::invokeMethod(clipboardWriter_, [this, &payloads, error, &result] {
+                    result = clipboardWriter_->setClipboard(payloads, error);
+                }, Qt::BlockingQueuedConnection);
+                return result;
+            };
+            connect(clipboardWriter_, &WaylandDataControlBackend::clipboardRead,
+                    &pasteController_, &PasteController::clipboardRead);
+        } else {
+            qWarning().noquote() << "Image batch clipboard backend:" << clipboardError;
+        }
+        pasteController_.targetIsActive = [this] {
+            return windowManagement_ ? (targetWindow_ && targetWindow_->isActive()) : !isActive();
+        };
+        connect(&pasteController_, &PasteController::hideRequested, this, [this] {
+            savePosition();
+            QWindow::hide();
+            if (targetWindow_) targetWindow_->requestActivate();
+        });
+        connect(&pasteController_, &PasteController::failed, this, [this] {
+            if (!isVisible()) showPopup();
+        });
 #if PLASMA_VERSION_MAJOR > 6 || (PLASMA_VERSION_MAJOR == 6 && PLASMA_VERSION_MINOR >= 7)
         Plasma::setupPlasmaStyle(engine_.engine().get());
 #endif
@@ -70,6 +111,12 @@ public:
         setupPlasmaShell();
     }
 
+    ~CliprovePopup() override {
+        pasteController_.cancel();
+        clipboardThread_.quit();
+        clipboardThread_.wait();
+    }
+
     void toggle()
     {
         if (isVisible())
@@ -77,9 +124,23 @@ public:
         else
             showPopup();
     }
+    QString targetApplication() const { return targetWindow_ ? targetWindow_->appId() : QString(); }
+    bool canTrackWindows() const { return bool(windowManagement_); }
 public slots:
     void showPopup()
     {
+        pasteController_.cancel();
+        if (!isVisible() && windowManagement_) {
+            auto *active = windowManagement_->activeWindow();
+            targetWindow_ = active && active->appId() != QGuiApplication::desktopFileName()
+                ? active : nullptr;
+        }
+        if (mainItem()) {
+            const QString appId = targetWindow_ ? targetWindow_->appId() : QString();
+            mainItem()->setProperty("terminalPaste", PasteController::usesShift(appId));
+            qInfo().noquote() << "[paste-target]" << appId
+                             << (PasteController::usesShift(appId) ? "Ctrl+Shift+V" : "Ctrl+V");
+        }
         prepareGeometry();
         ensurePlasmaSurface();
         applyRememberedPosition();
@@ -93,6 +154,7 @@ public slots:
 
     void hidePopup()
     {
+        pasteController_.cancel();
         savePosition();
         QWindow::hide();
     }
@@ -102,6 +164,10 @@ private:
     {
         auto *registry = new KWayland::Client::Registry(this);
         auto *connection = KWayland::Client::ConnectionThread::fromApplication(qGuiApp);
+        connect(registry, &KWayland::Client::Registry::plasmaWindowManagementAnnounced,
+                this, [this, registry](quint32 name, quint32 version) {
+            windowManagement_.reset(registry->createPlasmaWindowManagement(name, version));
+        });
         connect(registry, &KWayland::Client::Registry::plasmaShellAnnounced,
                 this, [this, registry](quint32 name, quint32 version) {
             if (!plasmaShell_) {
@@ -247,7 +313,12 @@ private:
         settings.sync();
     }
 
+    PasteController pasteController_;
+    QThread clipboardThread_;
+    WaylandDataControlBackend *clipboardWriter_ = nullptr;
     PlasmaQuick::SharedQmlEngine engine_;
+    std::unique_ptr<KWayland::Client::PlasmaWindowManagement> windowManagement_;
+    QPointer<KWayland::Client::PlasmaWindow> targetWindow_;
     std::unique_ptr<KWayland::Client::PlasmaShell> plasmaShell_;
     std::unique_ptr<KWayland::Client::PlasmaShellSurface> plasmaSurface_;
     QTimer saveTimer_;
@@ -275,6 +346,8 @@ public slots:
             .arg(popup_->isVisible());
     }
     void moveTo(int x, int y) { popup_->setPosition(x, y); }
+    QString targetApplication() const { return popup_->targetApplication(); }
+    bool canTrackWindows() const { return popup_->canTrackWindows(); }
 
 private:
     CliprovePopup *popup_;

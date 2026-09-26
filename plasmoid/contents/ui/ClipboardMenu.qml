@@ -73,7 +73,6 @@ PlasmaComponents3.ScrollView {
 
     PlasmaComponents3.ScrollBar.horizontal.policy: PlasmaComponents3.ScrollBar.AlwaysOff
 
-    onItemSelected: uuid => model.moveToTop(uuid);
     onRemove: uuid => model.remove(uuid)
     onEdit: modelData => {
         clipboardMenu.T.StackView.view.push(Qt.resolvedUrl("EditPage.qml"), {
@@ -212,7 +211,6 @@ PlasmaComponents3.ScrollView {
         case Qt.Key_Return: {
             if (clipboardMenu.selectedUuids.length > 0) {
                 const uuids = clipboardMenu.selectedUuidList();
-                clipboardMenu.clearMultiSelection();
                 clipboardMenu.pasteSelection(uuids);
                 event.accepted = true;
             } else {
@@ -307,7 +305,6 @@ PlasmaComponents3.ScrollView {
                     Keys.onReturnPressed: event => {
                         if (clipboardMenu.selectedUuids.length > 0) {
                             const uuids = clipboardMenu.selectedUuidList();
-                            clipboardMenu.clearMultiSelection();
                             clipboardMenu.pasteSelection(uuids);
                             event.accepted = true;
                         } else if (menuListView.currentItem !== null) {

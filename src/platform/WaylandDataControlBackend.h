@@ -22,6 +22,10 @@ public:
     ~WaylandDataControlBackend() override;
 
     bool start(QString *error = nullptr) override;
+    void setCaptureEnabled(bool enabled) { captureEnabled_ = enabled; }
+signals:
+    void clipboardRead(const QString &mime);
+public:
     QString backendName() const override;
     bool setClipboard(const MimePayloads &payloads, QString *error = nullptr) override;public:
     // C protocol callbacks must be addressable by the generated listener tables.
@@ -52,4 +56,7 @@ private:
     QHash<ext_data_control_source_v1 *, MimePayloads> sources_;
     QSocketNotifier *notifier_ = nullptr;
     bool suppressOwnSelection_ = false;
+    bool captureEnabled_ = true;
+    ext_data_control_source_v1 *currentSource_ = nullptr;
+    quint64 sourceGeneration_ = 0;
 };

@@ -98,9 +98,16 @@ install(TARGETS cliprove-paste-daemon RUNTIME DESTINATION bin)
 if(TARGET Plasma::PlasmaQuick AND TARGET Plasma::KWaylandClient AND TARGET KF6::GlobalAccel AND TARGET Qt6::Quick AND TARGET Qt6::Qml)
     add_executable(cliprove-popup
         src/popup/CliprovePopup.cpp
+        src/popup/PasteController.cpp
+        src/popup/PasteController.h
+        src/platform/ClipboardBackend.h
+        src/platform/WaylandDataControlBackend.h
+        src/platform/WaylandDataControlBackend.cpp
+        "${PROTOCOL_CODE}"
         resources/popup.qrc
     )
     target_link_libraries(cliprove-popup PRIVATE
+        PkgConfig::WAYLAND
         Qt6::Core
         Qt6::DBus
         Qt6::Gui
@@ -111,11 +118,22 @@ if(TARGET Plasma::PlasmaQuick AND TARGET Plasma::KWaylandClient AND TARGET KF6::
         KF6::GlobalAccel
     )
     target_compile_options(cliprove-popup PRIVATE -Wall -Wextra -Wpedantic)
+    target_include_directories(cliprove-popup PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_BINARY_DIR}/generated")
     install(TARGETS cliprove-popup RUNTIME DESTINATION bin)
 endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    add_executable(paste-controller-test
+        tests/PasteControllerTest.cpp
+        src/popup/PasteController.cpp
+        src/popup/PasteController.h
+    )
+    target_include_directories(paste-controller-test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    target_link_libraries(paste-controller-test PRIVATE Qt6::Gui Qt6::DBus Qt6::Test)
+    add_test(NAME paste-controller-test COMMAND dbus-run-session -- $<TARGET_FILE:paste-controller-test> -platform offscreen)
+
     add_executable(history-store-test
         tests/HistoryStoreTest.cpp
         src/core/ClipboardTypes.h

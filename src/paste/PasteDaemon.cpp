@@ -23,13 +23,23 @@ public:
 
 public slots:
     bool paste() {
+        return pasteWithShift(false);
+    }
+
+    bool pasteWithShift(bool shift) {
         QString error;
-        const bool ok = backend_->paste(&error);
+        const bool ok = backend_->pasteWithShift(shift, &error);
         if (!ok) {
             status_ = error.isEmpty() ? QStringLiteral("Paste failed") : error;
             qWarning().noquote() << "[paste-daemon]" << status_;
         }
         return ok;
+    }
+
+    bool ensureReady() {
+        QString error;
+        if (!backend_->start(&error)) status_ = error;
+        return backend_->isReady();
     }
 
     bool ready() const {

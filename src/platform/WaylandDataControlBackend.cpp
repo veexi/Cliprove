@@ -1,4 +1,9 @@
 #include "WaylandDataControlBackend.h"
+#include <QThread>
+#include <atomic>
+#include <memory>
+#include <signal.h>
+#include <pthread.h>
 
 #include "ext-data-control-v1-client-protocol.h"
 
@@ -112,6 +117,8 @@ bool WaylandDataControlBackend::setClipboard(const MimePayloads &payloads, QStri
         ext_data_control_source_v1_offer(source, it.key().toUtf8().constData());
 
     sources_.insert(source, payloads);
+    currentSource_ = source;
+    ++sourceGeneration_;
     suppressOwnSelection_ = true;
     ext_data_control_device_v1_set_selection(device_, source);
 
@@ -169,7 +176,7 @@ void WaylandDataControlBackend::deviceSelection(
     self->selectionOffer_ = offer;
 
     if (!offer) return;
-    if (self->suppressOwnSelection_)
+    if (self->suppressOwnSelection_ || !self->captureEnabled_)
         return;
     self->captureOffer(offer);
 }
@@ -269,24 +276,49 @@ void WaylandDataControlBackend::sourceSend(
     const MimePayloads payloads = self->sources_.value(source);
     const QByteArray bytes = payloads.value(QString::fromUtf8(mimeType));
 
-    qsizetype offset = 0;
-    while (offset < bytes.size()) {
-        const ssize_t n = write(fd, bytes.constData() + offset,
-                                static_cast<size_t>(bytes.size() - offset));
-        if (n > 0) {
-            offset += n;
-        } else if (n < 0 && errno == EINTR) {
-            continue;
-        } else {
-            break;
+    const quint64 generation = self->sourceGeneration_;
+    const bool current = source == self->currentSource_;
+    const QString mime = QString::fromUtf8(mimeType);
+    auto success = std::make_shared<std::atomic_bool>(false);
+    // A reader may be in this very GUI thread (Klipper's QML model). Writing
+    // an image synchronously into its pipe would deadlock once the pipe fills.
+    auto *transfer = QThread::create([bytes, fd, success] {
+        sigset_t blocked;
+        sigemptyset(&blocked);
+        sigaddset(&blocked, SIGPIPE);
+        pthread_sigmask(SIG_BLOCK, &blocked, nullptr);
+        fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+        qsizetype offset = 0;
+        while (offset < bytes.size()) {
+            const ssize_t n = write(fd, bytes.constData() + offset,
+                                    static_cast<size_t>(bytes.size() - offset));
+            if (n > 0) {
+                offset += n;
+            } else if (n < 0 && errno == EINTR) {
+                continue;
+            } else if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                pollfd writable{fd, POLLOUT, 0};
+                if (poll(&writable, 1, 5000) > 0 && (writable.revents & POLLOUT)) continue;
+                break;
+            } else {
+                break;
+            }
         }
-    }
-    close(fd);
+        close(fd);
+        success->store(offset == bytes.size());
+    });
+    QObject::connect(transfer, &QThread::finished, self, [self, success, generation, current, mime] {
+        if (success->load() && current && generation == self->sourceGeneration_)
+            emit self->clipboardRead(mime);
+    });
+    QObject::connect(transfer, &QThread::finished, transfer, &QObject::deleteLater);
+    transfer->start();
 }
 
 void WaylandDataControlBackend::sourceCancelled(
     void *data, ext_data_control_source_v1 *source) {
     auto *self = static_cast<WaylandDataControlBackend *>(data);
+    if (self->currentSource_ == source) self->currentSource_ = nullptr;
     self->sources_.remove(source);
     ext_data_control_source_v1_destroy(source);
 }

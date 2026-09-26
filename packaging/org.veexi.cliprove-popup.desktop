@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Cliprove
+Comment=Clipboard history with direct paste
+Exec=cliprove-popup
+Icon=edit-paste
+Categories=Utility;
+Terminal=false
+NoDisplay=true
+X-KDE-Wayland-Interfaces=org_kde_plasma_window_management
