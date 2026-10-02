@@ -14,7 +14,7 @@ Cliprove owns **Meta+V** directly through KDE GlobalAccel. It does not use a pan
 
 On first launch the popup is centered on the active display. If you move it, the position is saved and restored the next time it opens.
 
-The popup is a native `PlasmaQuick::PlasmaWindow`. Direct paste is injected through the XDG RemoteDesktop portal and libei.
+The popup is a native `PlasmaQuick::PlasmaWindow`. Direct paste is injected through a Linux uinput virtual keyboard. The current user must have read/write access to `/dev/uinput`; no RemoteDesktop portal session or keyboard-control prompt is used.
 
 The original window is remembered before opening the popup. Konsole and recognized terminal applications receive **Ctrl+Shift+V**; other applications receive **Ctrl+V**. For an embedded terminal (for example in an editor), use **Shift+click** or **Shift+Enter** to force Ctrl+Shift+V. Release the modifier keys to complete the paste. These shortcuts assume the target application's default paste bindings.
 
@@ -24,7 +24,7 @@ When pasting images into a terminal application such as Codex, the image shortcu
 
 The per-user installer registers `org.veexi.cliprove-popup.desktop` with an absolute executable path and KDE's window-management interface declaration. This is required for target-window detection and terminal shortcut selection.
 
-The helper starts with the graphical session and retries transient portal failures with a bounded backoff. Failed paste requests are shown in the popup. No delayed paste is queued while permission is unavailable; allow the keyboard-control prompt and click again.
+The helper starts with the graphical session and waits briefly for the virtual keyboard to be discovered. Failed paste requests are shown in the popup. If `/dev/uinput` is unavailable or access is denied, the helper stays available for status queries and retries initialization on the next explicit paste request. No paste is queued while the keyboard is unavailable. Inspect the user service log rather than waiting for a portal prompt. Device access is session-specific; check it with `test -r /dev/uinput && test -w /dev/uinput` on each machine. The helper only exposes the two fixed paste shortcuts and does not provide a general typing API.
 
 ## Regression tests
 
@@ -59,7 +59,7 @@ For a per-user install:
 This installs two user services:
 
 - `cliprove-popup.service`: persistent Plasma popup and Meta+V owner;
-- `cliprove-paste-daemon.service`: portal/libei paste injector.
+- `cliprove-paste-daemon.service`: uinput virtual-keyboard paste injector.
 
 The installer also disables KDE's stock `show-on-mouse-pos` Meta+V shortcut so there is no conflict.
 
@@ -79,7 +79,8 @@ See `packaging/README.md`. This is therefore a convenient single-file package fo
 
 - `src/popup`: standalone Plasma popup, position persistence, GlobalAccel integration;
 - `src/paste`: D-Bus paste helper;
-- `src/platform/PortalEisPasteBackend.*`: RemoteDesktop portal + libei key injection;
+- `src/platform/UinputPasteBackend.*`: uinput key injection for the popup helper;
+- `src/platform/PortalEisPasteBackend.*`: legacy RemoteDesktop portal backend for the `cliptool` target;
 - `plasmoid/contents/ui`: forked KDE Clipboard QML with Ctrl-click multi-select;
 - `resources/popup.qrc`: embeds the modified clipboard QML;
 - `packaging`: user-service installer and AppImage staging.

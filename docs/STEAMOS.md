@@ -251,31 +251,19 @@ grep -n -B1 -A1 -E 'show-cliprove=|show-on-mouse-pos=' \
   ~/.config/kglobalshortcutsrc
 ```
 
-## Paste helper / portal permission
+## Paste helper / virtual keyboard
 
-After restarting or reinstalling the paste helper it can briefly report:
-
-```text
-Waiting for keyboard input permission...
-```
-
-Do not immediately treat this as a failure. On the successful SteamOS deployment it became ready after a few seconds.
-
-Verify:
+Current source uses a uinput virtual keyboard instead of the portal/libei helper used by the original SteamOS deployment. Check device access on the Deck before deploying a new build:
 
 ```bash
+test -r /dev/uinput && test -w /dev/uinput
 qdbus org.veexi.CliprovePaste /Paste org.veexi.CliprovePaste.ready
 qdbus org.veexi.CliprovePaste /Paste org.veexi.CliprovePaste.status
 ```
 
-Expected:
+The updated helper briefly reports `Initializing virtual paste keyboard...`, then `true` / `Direct paste ready (uinput)`. No keyboard-control portal session is opened. If device access is unavailable, inspect `journalctl --user -u cliprove-paste-daemon.service`; initialization is retried by the next explicit paste request. Do not make `/dev/uinput` world-writable.
 
-```text
-true
-Direct paste ready
-```
-
-If it stays in the waiting state, check for an XDG Desktop Portal RemoteDesktop/keyboard permission prompt.
+The September 2026 SteamOS deployment described elsewhere in this document was verified with the previous portal implementation. Rebuilding the new uinput helper still requires a fresh desktop paste check on the Deck.
 
 ## Deploy the binaries
 
@@ -329,7 +317,7 @@ journalctl --user -u cliprove-paste-daemon.service -n 30 --no-pager
 Expected high-level result:
 
 - both services: enabled and active;
-- paste helper: `true` / `Direct paste ready`;
+- paste helper: `true` / `Direct paste ready (uinput)`;
 - `show-cliprove=Meta+V,Meta+V,...`;
 - KDE stock `show-on-mouse-pos=none,...`;
 - popup log reaches `QQmlComponent::Ready`.

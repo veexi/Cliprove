@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "platform/PortalEisPasteBackend.h"
+#include "platform/UinputPasteBackend.h"
 
 #include <QCoreApplication>
 #include <QDBusConnection>
@@ -12,7 +12,7 @@ class PasteService final : public QObject {
     Q_CLASSINFO("D-Bus Interface", "org.veexi.CliprovePaste")
 
 public:
-    explicit PasteService(PortalEisPasteBackend *backend, QObject *parent = nullptr)
+    explicit PasteService(UinputPasteBackend *backend, QObject *parent = nullptr)
         : QObject(parent), backend_(backend) {
         connect(backend_, &PasteBackend::statusChanged, this,
                 [this](const QString &message) {
@@ -51,7 +51,7 @@ public slots:
     }
 
 private:
-    PortalEisPasteBackend *backend_;
+    UinputPasteBackend *backend_;
     QString status_;
 };
 
@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
     QCoreApplication::setApplicationName(QStringLiteral("cliprove-paste-daemon"));
     QCoreApplication::setOrganizationName(QStringLiteral("veexi"));
 
-    PortalEisPasteBackend backend;
+    UinputPasteBackend backend;
     PasteService service(&backend);
 
     auto bus = QDBusConnection::sessionBus();
@@ -82,8 +82,9 @@ int main(int argc, char **argv) {
 
     QString error;
     if (!backend.start(&error)) {
-        qCritical().noquote() << "Could not start paste backend:" << error;
-        return 5;
+        // Keep the status endpoint available; ensureReady retries after the
+        // device becomes available or its session permissions are corrected.
+        qWarning().noquote() << "Could not start paste backend:" << error;
     }
 
     return app.exec();

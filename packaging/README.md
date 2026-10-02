@@ -35,7 +35,6 @@ ARCH=x86_64 appimagetool build/Cliprove.AppDir dist/Cliprove-0.2.0-plasma6-x86_6
 - KDE Plasma 6 with the `org.kde.plasma.private.clipboard` QML module;
 - compatible Qt 6 / KF6 / Plasma runtime;
 - `qdbus`;
-- XDG Desktop Portal RemoteDesktop support;
-- libei/liboeffis.
+- Linux uinput support and current-user read/write access to `/dev/uinput`.
 
 Launching the AppImage starts both the popup process and the paste helper. If an installed Cliprove instance is already running, launching the AppImage simply asks that instance to show its popup.

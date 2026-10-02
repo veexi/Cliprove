@@ -135,7 +135,7 @@ void PasteController::paste(QObject *history, const QVariantList &uuids, bool sh
             return;
         }
         if (!reply.value()) {
-            fail(QStringLiteral("自动粘贴尚未就绪。若出现键盘控制授权，请允许后再次点击条目。"));
+            fail(QStringLiteral("自动粘贴尚未就绪，请稍后再次点击条目；若持续失败，请检查粘贴服务状态。"));
             return;
         }
         if (!modelGuard) {

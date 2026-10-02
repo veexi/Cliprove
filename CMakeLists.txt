@@ -83,14 +83,13 @@ install(TARGETS cliptool RUNTIME DESTINATION bin)
 add_executable(cliprove-paste-daemon
     src/paste/PasteDaemon.cpp
     src/platform/PasteBackend.h
-    src/platform/PortalEisPasteBackend.h
-    src/platform/PortalEisPasteBackend.cpp
+    src/platform/UinputPasteBackend.h
+    src/platform/UinputPasteBackend.cpp
 )
 target_include_directories(cliprove-paste-daemon PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(cliprove-paste-daemon PRIVATE
     Qt6::Core
     Qt6::DBus
-    PkgConfig::EI
 )
 target_compile_options(cliprove-paste-daemon PRIVATE -Wall -Wextra -Wpedantic)
 install(TARGETS cliprove-paste-daemon RUNTIME DESTINATION bin)
